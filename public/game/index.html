@@ -23,6 +23,19 @@
   <script>
   const GameState = { sound: true, character: null, bgm: null };
 
+const ZONE_TITLES = {
+  1: 'Un Comienzo',
+  2: 'Entre Tonadas',
+  3: 'El Paseo Diario',
+  4: 'Mi Cancion Favorita',
+  5: 'Nuestro Pequeño Locky',
+  6: 'Aniversario En Pandemia',
+  7: 'Entonces Fuimos Cuatro',
+  8: 'Bajando Estrellas',
+  9: 'El Dia Esperado',
+};
+
+  
   /* ===================== DEBUG ZONE BACKGROUNDS ===================== */
   const ZONE_BG_COLORS  = [0x263238, 0x3E2723, 0x1B5E20, 0x4A148C];
   const ZONE_BG_ALPHA   = 0.18;
@@ -276,6 +289,48 @@
 }
 
 
+function _showPlayerBubble(scene, text, autoHideMs = 1800) {
+  // kill previous if any
+  if (scene._playerBubble) {
+    if (scene._playerBubble._follow) scene._playerBubble._follow.remove(false);
+    scene._playerBubble.destroy(true);
+    scene._playerBubble = null;
+  }
+
+  const bubble = scene.add.text(
+    scene.player.x,
+    scene.player.y - scene.player.displayHeight - 40,
+    text,
+    { fontFamily:"monospace", fontSize:14, color:"#ffffff", backgroundColor:"#000000", align:"center" }
+  ).setOrigin(0.5,1).setDepth(4000).setAlpha(0);
+
+  scene._playerBubble = bubble;
+
+  // fade in
+  scene.tweens.add({ targets:bubble, alpha:1, duration:300, ease:'Sine.easeInOut' });
+
+  // follow player
+  bubble._follow = scene.time.addEvent({
+    delay:16, loop:true, callback:()=>{
+      bubble.setPosition(scene.player.x, scene.player.y - scene.player.displayHeight - 40);
+    }
+  });
+
+  if (autoHideMs > 0) {
+    scene.time.delayedCall(autoHideMs, ()=>{
+      scene.tweens.add({
+        targets:bubble, alpha:0, duration:250,
+        onComplete:()=>{
+          if (bubble._follow) bubble._follow.remove(false);
+          bubble.destroy(true);
+          if (scene._playerBubble === bubble) scene._playerBubble = null;
+        }
+      });
+    });
+  }
+}
+
+
   // -------------------- ZONES (mini-scenes) --------------------
   const ZONE_DEFS = {
     1: {
@@ -355,81 +410,179 @@
       },
     },
 
-    // -------- Scene 2: extras anim + singer from a SINGLE PNG (3 frames horizontally) --------
-    2: {
-      manifest: {
-        images: [
-          { key:'scene3',      path:'/assets/scenes/scene3/scene3.png' },
-          { key:'s3_extras1',  path:'/assets/scenes/scene3/extra/extras_musica.png' },
-          { key:'s3_extras2',  path:'/assets/scenes/scene3/extra/extras_musica2.png' },
-          { key:'s2_singer_sheet', path:'/assets/sofia/scene2/sofia_canta.png' }
-        ]
-      },
-      build(scene, container){
-        const animKey = 's3_extras_anim';
-        if (!scene.anims.exists(animKey)) {
-          scene.anims.create({
-            key: animKey,
-            frames: [{ key:'s3_extras1' }, { key:'s3_extras2' }],
-            frameRate: 3,
-            repeat: -1,
-            yoyo: true
-          });
-        }
-        const extra = scene.add.sprite(-320, -10, 's3_extras1')
-          .setOrigin(0.5, 1)
-          .setScale(0.30)
-          .setDepth(2);
-        extra.play(animKey);
-        container.add(extra);
+   // -------- Scene 2: extras + (NPC = el otro personaje) --------
+// -------- Scene 2: extras anim + singer + Joaquin guitar + LOCAL proximity bubble --------
+// -------- Scene 2: extras + ONE NPC (the "other") + player speaks on proximity --------
+2: {
+  manifest: {
+    images: [
+      { key:'scene3',      path:'/assets/scenes/scene3/scene3.png' },
+      { key:'s3_extras1',  path:'/assets/scenes/scene3/extra/extras_musica.png' },
+      { key:'s3_extras2',  path:'/assets/scenes/scene3/extra/extras_musica2.png' },
 
-        // Build a spritesheet from single PNG (3 frames horizontally)
-        const SHEET_KEY   = 's2_singer_sheet';
-        const SPRITE_KEY  = 's2_singer';
-        const img = scene.textures.get(SHEET_KEY).getSourceImage();
+      // Sofía singer (sheet: 3 frames horizontally)
+      { key:'s2_singer_sheet', path:'/assets/sofia/scene2/sofia_canta.png' },
+
+      // Joaquín guitar (3 separate PNGs; if one missing, anim still works)
+      { key:'joaquin_guitar1', path:'/assets/joaquin/scene2/joaquin_guitar.png' },
+      { key:'joaquin_guitar2', path:'/assets/joaquin/scene2/joaquin_guitar2.png' },
+      { key:'joaquin_guitar3', path:'/assets/joaquin/scene2/joaquin_guitar3.png' },
+    ]
+  },
+
+  // --- Local player bubble (independent of other scenes) ---
+  _showPlayerBubble(scene, text, autoHideMs = 1800){
+    if (this._pBubble) {
+      try { this._pBubble._follow?.remove(false); } catch(_) {}
+      this._pBubble.destroy(true);
+      this._pBubble = null;
+    }
+    const bubble = scene.add.text(
+      scene.player.x,
+      scene.player.y - scene.player.displayHeight - 40,
+      text,
+      { fontFamily:'monospace', fontSize:14, color:'#ffffff', backgroundColor:'#000000', align:'center' }
+    ).setOrigin(0.5,1).setDepth(6500).setAlpha(0);
+
+    this._pBubble = bubble;
+
+    scene.tweens.add({ targets:bubble, alpha:1, duration:200 });
+    bubble._follow = scene.time.addEvent({
+      delay:16, loop:true, callback:()=>{
+        if (!bubble.active) return;
+        bubble.setPosition(scene.player.x, scene.player.y - scene.player.displayHeight - 40);
+      }
+    });
+
+    if (autoHideMs > 0){
+      scene.time.delayedCall(autoHideMs, ()=>{
+        scene.tweens.add({
+          targets:bubble, alpha:0, duration:220,
+          onComplete:()=>{
+            try { bubble._follow?.remove(false); } catch(_) {}
+            bubble.destroy(true);
+            if (this._pBubble === bubble) this._pBubble = null;
+          }
+        });
+      });
+    }
+  },
+
+  build(scene, container){
+    // Background extras
+    const animKey = 's3_extras_anim';
+    if (!scene.anims.exists(animKey)) {
+      scene.anims.create({
+        key: animKey,
+        frames: [{ key:'s3_extras1' }, { key:'s3_extras2' }],
+        frameRate: 3, repeat: -1, yoyo: true
+      });
+    }
+    container.add(
+      scene.add.sprite(-320, -10, 's3_extras1')
+        .setOrigin(0.5,1).setScale(0.30).setDepth(2).play(animKey)
+    );
+
+    const who = GameState.character || 'joaquin';        // player
+    const other = (who === 'sofia') ? 'joaquin' : 'sofia'; // the single NPC we’ll spawn
+
+    let npcRef = null;
+
+    // --- NPC = Sofía singer (only if player is Joaquín) ---
+    if (other === 'sofia') {
+      const img = scene.textures.get('s2_singer_sheet')?.getSourceImage();
+      if (img){
         const framesAcross = 3;
         const frameWidth  = Math.round(img.width / framesAcross);
         const frameHeight = img.height;
 
-        if (!scene.textures.exists(SPRITE_KEY)) {
-          scene.textures.addSpriteSheet(SPRITE_KEY, img, {
-            frameWidth,
-            frameHeight,
-            endFrame: framesAcross - 1
+        if (!scene.textures.exists('s2_singer')){
+          scene.textures.addSpriteSheet('s2_singer', img, {
+            frameWidth, frameHeight, endFrame: framesAcross - 1
           });
         }
-
-        const s2Anim = 's2_singer_anim';
-        if (!scene.anims.exists(s2Anim)) {
+        if (!scene.anims.exists('s2_singer_anim')){
           scene.anims.create({
-            key: s2Anim,
-            frames: scene.anims.generateFrameNumbers(SPRITE_KEY, { frames: [0,1,2,1] }),
-            frameRate: 3,
-            repeat: -1
+            key:'s2_singer_anim',
+            frames: scene.anims.generateFrameNumbers('s2_singer', { frames: [0,1,2,1] }),
+            frameRate: 3, repeat: -1
           });
         }
+        npcRef = scene.add.sprite(-60, 80, 's2_singer', 0)
+          .setOrigin(0.5,1).setScale(0.40).setDepth(3).play('s2_singer_anim');
+        container.add(npcRef);
 
-        const singer = scene.add.sprite(-60, 80, SPRITE_KEY, 0)
-          .setOrigin(0.5, 1)
-          .setScale(0.40)
-          .setDepth(3);
-        singer.play(s2Anim);
-        container.add(singer);
+        // gentle bob
+        scene.tweens.add({ targets:npcRef, y:'-=4', duration:10000, yoyo:true, repeat:-1, ease:'Sine.easeInOut' });
+      }
+    }
 
-        scene.tweens.add({
-          targets: singer,
-          y: '-=4',
-          duration: 10000,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut'
-        });
-      },
-      enter(scene){},
-      leave(scene){},
-      update(scene){},
-    },
+    // --- NPC = Joaquín guitar (only if player is Sofía) ---
+    if (other === 'joaquin') {
+     const hasJ1 = scene.textures.exists('joaquin_guitar1');
+     const hasJ2 = scene.textures.exists('joaquin_guitar2');
+     const hasJ3 = scene.textures.exists('joaquin_guitar3');
 
+const frames = [
+  hasJ1 && { key:'joaquin_guitar1' },
+  hasJ2 && { key:'joaquin_guitar2' },
+  hasJ3 && { key:'joaquin_guitar3' },
+].filter(Boolean);
+
+      if (frames.length){
+        if (frames.length === 1) frames.push(frames[0]); // ensure loopable
+        if (!scene.anims.exists('joaquin_guitar_anim')){
+          scene.anims.create({ key:'joaquin_guitar_anim', frames, frameRate:3, repeat:-1, yoyo:true });
+        }
+       npcRef = scene.add.sprite(220, -80, frames[0].key)
+       .setOrigin(0.5,1).setScale(0.60).setDepth(3).setFlipX(true).play('joaquin_guitar_anim');
+        container.add(npcRef);
+      }
+    }
+
+    // Save scene2 state
+    scene._s2 = {
+      container,
+      npcRef,
+      npcRole: other,
+      triggerRadius: 110,
+      spokeOnce: false
+    };
+  },
+
+  enter(scene){
+    if (!scene._s2) return;
+    this._pBubble && this._pBubble.destroy(true);
+    this._pBubble = null;
+    scene._s2.spokeOnce = false;
+  },
+
+  leave(scene){
+    this._pBubble && this._pBubble.destroy(true);
+    this._pBubble = null;
+    scene._s2 = null;
+  },
+
+  update(scene){
+    const s2 = scene._s2; if (!s2 || !s2.npcRef) return;
+
+    // NPC faces player
+    const npcW = _worldPos(scene, s2.container, s2.npcRef);
+    s2.npcRef.setFlipX(scene.player.x < npcW.x);
+
+    // Proximity → player says the line ONCE
+    const dx = Math.abs(scene.player.x - npcW.x);
+    if (!s2.spokeOnce && dx <= s2.triggerRadius) {
+      s2.spokeOnce = true;
+
+      const playerLine =
+        (s2.npcRole === 'joaquin') ? 'Qué bonito toca la guitarra'
+                                   : 'Qué lindo canta';
+
+      this._showPlayerBubble(scene, playerLine, 1800);
+    }
+  },
+},
     /* ===================== SCENE 3 ===================== */
     3: {
       manifest: { images:[ { key:'scene2', path:'/assets/scenes/scene2/scene2.png' } ] },
@@ -546,161 +699,170 @@
     },
 
     // -------- Scene 4: Near NPC → bubble + Spotify-like widget; BGM keeps until Play --------
-    4: {
-      manifest: {
-        images: [
-          { key: "scene4",       path: "/assets/scenes/scene4/scene4.png" },
-          { key: "s4_bench",     path: "/assets/scenes/scene4/extra/bench.png" },
-          { key: "s4_npc_sofia", path: "/assets/sofia/casual/sofia_standing.png" }
-        ]
-      },
+4: {
+  manifest: {
+    images: [
+      { key: "scene4",         path: "/assets/scenes/scene4/scene4.png" },
+      { key: "s4_bench",       path: "/assets/scenes/scene4/extra/bench.png" },
+      { key: "s4_npc_sofia",   path: "/assets/sofia/casual/sofia_standing.png" },
+      { key: "s4_npc_joaquin", path: "/assets/joaquin/casual/joaquin_standing.png" }
+    ]
+  },
 
-      build(scene, container){
-        const baseSrc = scene.textures.get("scene4").getSourceImage();
-        const baseW   = baseSrc.width;
+  build(scene, container){
+    const baseSrc = scene.textures.get("scene4").getSourceImage();
+    const baseW   = baseSrc.width;
 
-        // Bench
-        const BENCH_REL_WIDTH = 0.250;
-        const benchTexW  = scene.textures.get("s4_bench").getSourceImage().width;
-        const benchScale = (BENCH_REL_WIDTH * baseW) / benchTexW;
+    // Bench
+    const BENCH_REL_WIDTH = 0.250;
+    const benchTexW  = scene.textures.get("s4_bench").getSourceImage().width;
+    const benchScale = (BENCH_REL_WIDTH * baseW) / benchTexW;
 
-        const bench = scene.add.sprite(0, -8, "s4_bench")
-          .setOrigin(0.5, 1)
-          .setScale(benchScale)
-          .setDepth(3);
-        container.add(bench);
+    const bench = scene.add.sprite(0, -8, "s4_bench")
+      .setOrigin(0.5, 1)
+      .setScale(benchScale)
+      .setDepth(3);
+    container.add(bench);
 
-        // NPC (centered)
-        const NPC_REL_WIDTH = 0.080;
-        const npcTexW  = scene.textures.get("s4_npc_sofia").getSourceImage().width;
-        const npcScale = (NPC_REL_WIDTH * baseW) / npcTexW;
+    // --- NPC = the "other" character ---
+    const who   = GameState.character || 'joaquin';           // player
+    const other = (who === 'sofia') ? 'joaquin' : 'sofia';    // NPC
+    const npcKey = (other === 'sofia') ? 's4_npc_sofia' : 's4_npc_joaquin';
 
-        const npc = scene.add.sprite(0, 0, "s4_npc_sofia")
-          .setOrigin(0.5, 1)
-          .setScale(npcScale)
-          .setDepth(4);
-        container.add(npc);
+    const NPC_REL_WIDTH = 0.080;
+    const npcTexW  = scene.textures.get(npcKey).getSourceImage().width;
+    const npcScale = (NPC_REL_WIDTH * baseW) / npcTexW;
 
-        scene._s4 = {
-          popupTimer: null,
-          npcBubble: null, // <- NUEVO: globo de diálogo del NPC
-          container,
-          npc,
-          stopGap: 10,           // get really close
-          triggerRadius: 110,    // very close so it feels intimate
-          ui: null,              // widget
-          uiFollow: null,        // follow timer
-          bubble: null,          // text bubble
-          song: null,
-          songPlaying: false,
-          locking: false
-        };
-      },
+    const npc = scene.add.sprite(0, 0, npcKey)
+      .setOrigin(0.5, 1)
+      .setScale(npcScale)
+      .setDepth(4);
+    container.add(npc);
 
-      // keep BGM until Play
-      enter(scene){},
+    scene._s4 = {
+      popupTimer: null,
+      npcBubble: null,
+      container,
+      npc,
+      stopGap: 10,
+      triggerRadius: 110,
+      ui: null,
+      uiFollow: null,
+      bubble: null,
+      song: null,
+      songPlaying: false,
+      locking: false,
+      // store original player scale when we tweak Sofía
+      prevPlayerScale: null,
+    };
+  },
 
-     leave(scene){
-  // Limpiar UI y timers
-  if (scene._s4?.ui) scene._s4.ui.destroy(true);
-  if (scene._s4?.uiFollow) { scene._s4.uiFollow.remove(false); scene._s4.uiFollow = null; }
-  if (scene._s4?.popupTimer) { try { scene._s4.popupTimer.remove(false); } catch(_){} scene._s4.popupTimer = null; }
-  if (scene._s4?.bubble) {
-    if (scene._s4.bubble._follow) scene._s4.bubble._follow.remove(false);
-    scene._s4.bubble.destroy(true);
-  }
-
-  if (scene._s4?.dialogTimers && Array.isArray(scene._s4.dialogTimers)) {
-  scene._s4.dialogTimers.forEach(t => { try { t.remove(false); } catch(_){} });
-}
-
-  if (scene._s4?.npcBubble) {
-  if (scene._s4.npcBubble._follow) scene._s4.npcBubble._follow.remove(false);
-  scene._s4.npcBubble.destroy(true);
-}
-
-  // SI la canción de la escena está sonando, detenerla
-  if (scene._s4?.song && scene._s4.song.isPlaying) scene._s4.song.stop();
-
-  // Si el GameState.bgm era la canción de la escena, restaurar el BGM normal
-  if (GameState.bgm === scene._s4?.song) {
-    // Crear (o recrear) el BGM base
-    GameState.bgm = scene.sound.add('bgm', { loop:true, volume: 0.10 }); // ajusta volumen si quieres
-    if (GameState.sound) {
-      try { GameState.bgm.play(); } catch(_) {}
+  leave(scene){
+    // Clean UI and timers
+    if (scene._s4?.ui) scene._s4.ui.destroy(true);
+    if (scene._s4?.uiFollow) { scene._s4.uiFollow.remove(false); scene._s4.uiFollow = null; }
+    if (scene._s4?.popupTimer) { try { scene._s4.popupTimer.remove(false); } catch(_){} scene._s4.popupTimer = null; }
+    if (scene._s4?.bubble) {
+      if (scene._s4.bubble._follow) scene._s4.bubble._follow.remove(false);
+      scene._s4.bubble.destroy(true);
     }
-  }
+    if (scene._s4?.dialogTimers && Array.isArray(scene._s4.dialogTimers)) {
+      scene._s4.dialogTimers.forEach(t => { try { t.remove(false); } catch(_){} });
+    }
+    if (scene._s4?.npcBubble) {
+      if (scene._s4.npcBubble._follow) scene._s4.npcBubble._follow.remove(false);
+      scene._s4.npcBubble.destroy(true);
+    }
 
-  // Reset locks
-  scene._s4 = null;
-  scene._controlsLocked = false;
-  scene._lockStopX = null;
+    // Stop scene song if playing
+    if (scene._s4?.song && scene._s4.song.isPlaying) scene._s4.song.stop();
+
+    // If GameState.bgm was hijacked by scene song, restore base BGM
+    if (GameState.bgm === scene._s4?.song) {
+      GameState.bgm = scene.sound.add('bgm', { loop:true, volume: 0.10 });
+      if (GameState.sound) { try { GameState.bgm.play(); } catch(_) {} }
+    }
+
+    // Restore Sofía (player) original scale if we changed it here
+    if (scene._s4?.prevPlayerScale) {
+      scene.player.setScale(scene._s4.prevPlayerScale.x, scene._s4.prevPlayerScale.y);
+    }
+
+    // Reset locks
+    scene._s4 = null;
+    scene._controlsLocked = false;
+    scene._lockStopX = null;
+  },
+
+  update(scene){
+    const s4 = scene._s4;
+    if (!s4) return;
+
+    // WORLD coordinates for NPC vs PLAYER
+    const npcW = _worldPos(scene, s4.container, s4.npc);
+    const px   = scene.player.x;
+    const dx   = Math.abs(px - npcW.x);
+
+    // NPC looks at player
+    s4.npc.setFlipX(px < npcW.x);
+
+    if (s4.songPlaying) return;
+
+    // Show bubble + widget when very close
+    const near = dx <= s4.triggerRadius;
+    if (near && !s4.locking) {
+      s4.locking = true;
+      scene._controlsLocked = true;
+      scene._lockStopX = (px < npcW.x) ? (npcW.x - s4.stopGap) : (npcW.x + s4.stopGap);
+
+      // NPC speaks first
+      _s4ShowNpcBubble(scene, "Quiero mostrarte esta canción");
+
+      // After 3s, show the Spotify-like widget
+      if (s4.popupTimer) { try { s4.popupTimer.remove(false); } catch(_){} }
+      s4.popupTimer = scene.time.delayedCall(3000, () => {
+        if (s4 && s4.locking && !s4.ui && !s4.songPlaying) {
+          _s4ShowSpotifyWidget(scene, () => _s4StartSong(scene));
+        }
+      });
+    }
+
+    // Move away → cancel + clean
+    if (!near && s4.locking) {
+      s4.locking = false;
+      scene._controlsLocked = false;
+      scene._lockStopX = null;
+
+      if (s4.popupTimer) { try { s4.popupTimer.remove(false); } catch(_){} s4.popupTimer = null; }
+
+      if (s4.bubble) scene.tweens.add({
+        targets: s4.bubble, alpha: 0, duration: 250,
+        onComplete: () => {
+          if (s4.bubble?._follow) s4.bubble._follow.remove(false);
+          s4.bubble?.destroy(true);
+          s4.bubble = null;
+        }
+      });
+      if (s4.ui) { s4.ui.destroy(true); s4.ui = null; }
+      if (s4.uiFollow) { s4.uiFollow.remove(false); s4.uiFollow = null; }
+    }
+  },
 },
 
-
-      update(scene){
-        const s4 = scene._s4;
-        if (!s4) return;
-
-        // WORLD coordinates for NPC vs PLAYER
-        const npcW = _worldPos(scene, s4.container, s4.npc);
-        const px   = scene.player.x;
-        const dx   = Math.abs(px - npcW.x);
-
-        // NPC looks at player
-        s4.npc.setFlipX(px < npcW.x);
-
-        if (s4.songPlaying) return;
-
-        // Show bubble + widget when very close
-        const near = dx <= s4.triggerRadius;
-        if (near && !s4.locking) {
-  s4.locking = true;
-  scene._controlsLocked = true;
-  scene._lockStopX = (px < npcW.x) ? (npcW.x - s4.stopGap) : (npcW.x + s4.stopGap);
-
-  // Mostrar primero el globo de texto
-  _s4ShowBubble(scene, "Quiero mostrarte esta canción");
-
-  // Esperar 3s antes de mostrar el popup de Play
-  if (s4.popupTimer) { try { s4.popupTimer.remove(false); } catch(_){} }
-  s4.popupTimer = scene.time.delayedCall(3000, () => {
-    // Solo mostrar si seguimos en modo “locking”, no hay UI aún y no empezó la canción
-    if (s4 && s4.locking && !s4.ui && !s4.songPlaying) {
-      _s4ShowSpotifyWidget(scene, () => _s4StartSong(scene));
-    }
-  });
-}
-
-
-     if (!near && s4.locking) {
-  s4.locking = false;
-  scene._controlsLocked = false;
-  scene._lockStopX = null;
-
-  // CANCELAR el timer del popup si estaba pendiente
-  if (s4.popupTimer) { try { s4.popupTimer.remove(false); } catch(_){} s4.popupTimer = null; }
-
-  if (s4.bubble) scene.tweens.add({
-    targets:s4.bubble, alpha:0, duration:250,
-    onComplete:()=>{ if (s4.bubble?._follow) s4.bubble._follow.remove(false); s4.bubble?.destroy(true); s4.bubble=null; }
-  });
-  if (s4.ui) { s4.ui.destroy(true); s4.ui=null; }
-  if (s4.uiFollow) { s4.uiFollow.remove(false); s4.uiFollow = null; }
-}
-      },
-    },
     /* ===================== SCENE 5 ===================== */
 5: {
   manifest: {
     images: [
-      { key: 'scene5',       path: '/assets/scenes/scene5/scene5.png' },
-      { key: 's4_npc_sofia', path: '/assets/sofia/casual/sofia_standing.png' },
+      { key: 'scene5',         path: '/assets/scenes/scene5/scene5.png' },
+      { key: 's4_npc_sofia',   path: '/assets/sofia/casual/sofia_standing.png' },
+      { key: 's4_npc_joaquin', path: '/assets/joaquin/casual/joaquin_standing.png' },
+
+      // Loky (sitting + walk frames)
       { key: 's5_loky_sit',  path: '/assets/loky/loky_sitting.png' },
       { key: 'loky_walk1',   path: '/assets/loky/loky_walk1.png' },
       { key: 'loky_walk2',   path: '/assets/loky/loky_walk2.png' },
-      { key: 'loky_walk3',   path: '/assets/loky/loky_walk3.png' }, // optional
-      { key: 'loky_walk4',   path: '/assets/loky/loky_walk4.png' }  // optional
+      { key: 'loky_walk3',   path: '/assets/loky/loky_walk3.png' },
+      { key: 'loky_walk4',   path: '/assets/loky/loky_walk4.png' }
     ]
   },
 
@@ -708,34 +870,44 @@
     const baseImg = scene.textures.get('scene5').getSourceImage();
     const baseW   = baseImg.width;
 
-    // ---------- TUNABLES ----------
-    const SOFIA_REL_W    = 0.085; // Sofia size
-    const LOKY_REL_W     = 0.045; // Loky size
-    const FOLLOW_GAP     = 28;    // distance Loky keeps from player
-    const LERP_FOLLOW    = 0.20;  // same style as Scene 3 follower
-    const APPROACH_SPEED = 120;   // px/s for first approach (constant speed)
-    const MOVE_EPS       = 0.02;  // epsilon for “is moving”
-    // ------------------------------
+    // -------- Tunables --------
+    const NPC_REL_W        = 0.085;
+    const LOKY_REL_W       = 0.045;
+    const FOLLOW_GAP       = 28;
+    const LERP_FOLLOW      = 0.20;
+    const APPROACH_SPEED   = 120;  // px/s for first approach
+    const MOVE_EPS         = 0.02;
 
-    // Sofia (breathing; faces player)
-    const sofiaW = scene.textures.get('s4_npc_sofia').getSourceImage().width;
-    const sofia  = scene.add.sprite(0, 0, 's4_npc_sofia')
+    // Dialog trigger
+    const TRIGGER_RADIUS   = 110;
+    const STOP_GAP         = 14;
+    // --------------------------
+
+    const who   = GameState.character || 'joaquin';            // player
+    const other = (who === 'sofia') ? 'joaquin' : 'sofia';     // NPC
+    const npcKey = (other === 'sofia') ? 's4_npc_sofia' : 's4_npc_joaquin';
+
+    // NPC
+    const npcTexW = scene.textures.get(npcKey).getSourceImage().width;
+    const npc = scene.add.sprite(0, 0, npcKey)
       .setOrigin(0.5, 1)
-      .setScale((SOFIA_REL_W * baseW) / sofiaW)
+      .setScale((NPC_REL_W * baseW) / npcTexW)
       .setDepth(4);
-    container.add(sofia);
-    scene.tweens.add({ targets: sofia, y: '-=3', duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    container.add(npc);
 
-    // Loky (start sitting)
+    // Gentle idle bob
+    scene.tweens.add({ targets: npc, y: '-=3', duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+    // Loky
     const sitKey = scene.textures.exists('s5_loky_sit') ? 's5_loky_sit' : 'loky_walk1';
     const lokyW  = scene.textures.get(sitKey).getSourceImage().width;
-    const lucky  = scene.add.sprite(-baseW * 0.35, 0, sitKey)
+    const loky   = scene.add.sprite(-baseW * 0.35, 0, sitKey)
       .setOrigin(0.5, 1)
       .setScale((LOKY_REL_W * baseW) / lokyW)
       .setDepth(3);
-    container.add(lucky);
+    container.add(loky);
 
-    // Build Loky walk animation (use any available frames)
+    // Loky walk anim (robust to missing frames)
     const frames = ['loky_walk1','loky_walk2','loky_walk3','loky_walk4'].filter(k => scene.textures.exists(k));
     let walkKey = null;
     if (frames.length >= 2 && !scene.anims.exists('loky_walk_anim')) {
@@ -745,128 +917,180 @@
       walkKey = 'loky_walk_anim';
     }
 
-    // Scene bounds (world coords)
+    // World bounds for this scene
     const sx = container.scaleX || 1;
     const halfWorld = (baseW * sx) * 0.5;
     const leftBoundWorld  = container.x - halfWorld;
     const rightBoundWorld = container.x + halfWorld;
 
+    // Save scene state
     scene._s5 = {
-      container, sofia, lucky,
-      sitKey, walkKey,
+      container,
+      npc,
+      loky,
+
+      // Loky movement
+      sitKey,
+      walkKey,
       followGap: FOLLOW_GAP,
       lerp: LERP_FOLLOW,
       approachSpeed: APPROACH_SPEED,
       moveEps: MOVE_EPS,
 
-      leftBoundWorld, rightBoundWorld,
-      promoted: false,
-      mode: 'idle',       // 'idle' -> 'approachOnce' -> 'follow'
+      // Bounds
+      leftBoundWorld,
+      rightBoundWorld,
+
+      // Dialog
+      stopGap: STOP_GAP,
+      triggerRadius: TRIGGER_RADIUS,
+      didIntro: false,
+      _dlg1: null,
+      _dlg2: null,
+
+      // Loop handle
       loopEvt: null,
+
+      // For one-shot follow transition
+      mode: 'idle',
+      promoted: false,
     };
   },
 
   enter(scene){
     const s5 = scene._s5; if (!s5) return;
 
-    // Recompute bounds (resize safe)
+    // Recompute bounds on entry (resizes etc.)
     const baseImg = scene.textures.get('scene5').getSourceImage();
     const sx = s5.container.scaleX || 1;
     const halfWorld = (baseImg.width * sx) * 0.5;
     s5.leftBoundWorld  = s5.container.x - halfWorld;
     s5.rightBoundWorld = s5.container.x + halfWorld;
 
-    // Promote Loky to world space (keep scale)
+    // Promote Loky to world space once (so he can leave container bounds cleanly)
     if (!s5.promoted) {
       const sxC = s5.container.scaleX || 1;
-      const worldX = s5.container.x + s5.lucky.x * sxC;
-      s5.container.remove(s5.lucky);
-      s5.lucky.x = worldX;
-      s5.lucky.y = scene.railY;
-      s5.lucky.setScale(s5.lucky.scaleX * sxC, s5.lucky.scaleY * sxC);
-      scene.add.existing(s5.lucky);
+      const worldX = s5.container.x + s5.loky.x * sxC;
+      s5.container.remove(s5.loky);
+      s5.loky.x = worldX;
+      s5.loky.y = scene.railY;
+      s5.loky.setScale(s5.loky.scaleX * sxC, s5.loky.scaleY * sxC);
+      scene.add.existing(s5.loky);
       s5.promoted = true;
     }
 
-    // Start sitting
-    s5.lucky.setTexture(s5.sitKey);
-    s5.mode = 'idle'; // switch to approachOnce when player steps inside
+    // Reset state
+    s5.loky.setTexture(s5.sitKey);
+    s5.mode = 'idle';
+    s5.didIntro = false;
+    if (s5._dlg1) { try{s5._dlg1.remove(false);}catch{} s5._dlg1=null; }
+    if (s5._dlg2) { try{s5._dlg2.remove(false);}catch{} s5._dlg2=null; }
 
-    // Main loop
-    if (s5.loopEvt) { try { s5.loopEvt.remove(false); } catch{} }
+    // Main loop: NPC facing, dialog trigger, Loky follow
+    if (s5.loopEvt) { try { s5.loopEvt.remove(false); } catch(_) {} }
     s5.loopEvt = scene.time.addEvent({
       delay: 16,
       loop: true,
       callback: () => {
-        // Sofia faces the player (cosmetic)
-        s5.sofia.setFlipX(scene.player.x < s5.container.x);
+        // --- NPC faces player (use NPC world X, not container center) ---
+        const npcW = _worldPos(scene, s5.container, s5.npc);
+        s5.npc.setFlipX(scene.player.x < npcW.x);
 
-        const playerInside = (scene.player.x >= s5.leftBoundWorld && scene.player.x <= s5.rightBoundWorld);
+        // --- One-time dialog: Joaquin asks first, Sofía responds (regardless of who is player) ---
+        if (!s5.didIntro) {
+          const nearNpc = Math.abs(scene.player.x - npcW.x) <= s5.triggerRadius;
+          if (nearNpc) {
+            s5.didIntro = true;
 
-        // Outside → park & idle at nearest edge
-        if (!playerInside) {
+            // Lock & stop player close to NPC
+            scene._controlsLocked = true;
+            scene._lockStopX = (scene.player.x < npcW.x) ? (npcW.x - s5.stopGap) : (npcW.x + s5.stopGap);
+
+            // Route NPC bubbles to "other" (the NPC)
+            scene._s4 = { container: s5.container, npc: s5.npc, ui:null, uiFollow:null, bubble:null, npcBubble:null };
+
+            const playerIsJoaquin = (GameState.character || 'joaquin') === 'joaquin';
+
+            // Joaquin asks
+            if (playerIsJoaquin) {
+              _showPlayerBubble(scene, "¿Ahora tenemos un perrito!?");
+            } else {
+              _s4ShowNpcBubble(scene, "¿Ahora tenemos un perrito!?"); // NPC = Joaquín
+            }
+
+            // Sofía responds after 1.2s
+            s5._dlg1 = scene.time.delayedCall(1200, () => {
+              if (playerIsJoaquin) {
+                _s4ShowNpcBubble(scene, "Te presento a Locky."); // NPC = Sofía
+              } else {
+                _showPlayerBubble(scene, "Te presento a Locky.");
+              }
+            });
+
+            // Unlock after another 1.2s (lets bubbles fade naturally)
+            s5._dlg2 = scene.time.delayedCall(2400, () => {
+              scene._controlsLocked = false;
+              scene._lockStopX = null;
+            });
+          }
+        }
+
+        // --- Loky: stay parked at edge if player is outside this scene's bounds ---
+        const inside = (scene.player.x >= s5.leftBoundWorld && scene.player.x <= s5.rightBoundWorld);
+        if (!inside) {
           const atLeft = scene.player.x < s5.leftBoundWorld;
-          s5.lucky.x = atLeft ? s5.leftBoundWorld : s5.rightBoundWorld;
-          if (s5.lucky.anims?.isPlaying) s5.lucky.stop();
-          s5.lucky.setTexture(s5.sitKey);
-          s5.lucky.setFlipX(scene.player.x < s5.lucky.x);
+          s5.loky.x = atLeft ? s5.leftBoundWorld : s5.rightBoundWorld;
+          if (s5.loky.anims?.isPlaying) s5.loky.stop();
+          s5.loky.setTexture(s5.sitKey);
+          s5.loky.setFlipX(scene.player.x < s5.loky.x);
           s5.mode = 'idle';
           return;
         }
 
-        // First time inside → approach once
+        // First entry into bounds → approach once then follow
         if (s5.mode === 'idle') s5.mode = 'approachOnce';
 
-        // Desired spot near player (clamped)
+        // Desired spot near player
         const gap      = s5.followGap;
         const targetX  = scene.player.x + (scene.player.flipX ? -gap : gap);
         const desiredX = Phaser.Math.Clamp(targetX, s5.leftBoundWorld, s5.rightBoundWorld);
 
-        // Face the target
-        s5.lucky.setFlipX(desiredX < s5.lucky.x);
+        // Face movement direction
+        s5.loky.setFlipX(desiredX < s5.loky.x);
 
-        // Move style:
-        // - approachOnce: constant-speed approach (feels deliberate)
-        // - follow: Scene 3–style lerp to target
-        const prevX = s5.lucky.x;
+        // Move with either approach speed or lerp follow
+        const prevX = s5.loky.x;
         let nextX   = prevX;
-
         if (s5.mode === 'approachOnce') {
           const step = s5.approachSpeed * (16/1000);
           const delta = Phaser.Math.Clamp(desiredX - prevX, -step, step);
           nextX = prevX + delta;
-        } else { // 'follow' (Scene 3 style)
+        } else {
           nextX = Phaser.Math.Linear(prevX, desiredX, s5.lerp);
         }
 
-        // Decide animation state (Scene 3 logic + frame sync)
+        // Animate walk while moving, idle when not
         const moved = Math.abs(nextX - prevX) > s5.moveEps;
         if (moved) {
-          // Use walking animation
-          if (s5.walkKey) {
-            if (!s5.lucky.anims.currentAnim || s5.lucky.anims.currentAnim.key !== s5.walkKey) {
-              s5.lucky.play(s5.walkKey, true);
-            }
-            // Sync frame with player's walk when player is moving (like Scene 3)
-            if (scene.isMoving && scene.player.anims?.currentAnim) {
-              const pa = scene.player.anims.currentAnim;
-              const pf = scene.player.anims.currentFrame;
-              const da = s5.lucky.anims.currentAnim;
-              if (pf && da && da.frames && da.frames.length > 0) {
-                const idx = pf.index % da.frames.length;
-                if (da.frames[idx]) s5.lucky.anims.setCurrentFrame(da.frames[idx]);
-              }
+          if (s5.walkKey && (!s5.loky.anims.currentAnim || s5.loky.anims.currentAnim.key !== s5.walkKey)) {
+            s5.loky.play(s5.walkKey, true);
+          }
+          // Optional: sync gait to player when player is moving
+          if (scene.isMoving && scene.player.anims?.currentAnim && s5.loky.anims?.currentAnim) {
+            const pf = scene.player.anims.currentFrame, da = s5.loky.anims.currentAnim;
+            if (pf && da && da.frames && da.frames.length > 0) {
+              const idx = pf.index % da.frames.length;
+              if (da.frames[idx]) s5.loky.anims.setCurrentFrame(da.frames[idx]);
             }
           }
         } else {
-          // Idle (sit)
-          if (s5.lucky.anims?.isPlaying) s5.lucky.stop();
-          s5.lucky.setTexture(s5.sitKey);
+          if (s5.loky.anims?.isPlaying) s5.loky.stop();
+          s5.loky.setTexture(s5.sitKey);
         }
 
-        s5.lucky.x = nextX;
+        s5.loky.x = nextX;
 
-        // When approach finishes, switch to follow
+        // Switch mode when close enough to desired spot
         if (s5.mode === 'approachOnce' && Math.abs(desiredX - nextX) <= (s5.moveEps * 2)) {
           s5.mode = 'follow';
         }
@@ -876,29 +1100,41 @@
 
   leave(scene){
     const s5 = scene._s5; if (!s5) return;
-    if (s5.loopEvt) { try { s5.loopEvt.remove(false); } catch{} s5.loopEvt = null; }
 
-    // Clamp to edge and idle on exit
-    s5.lucky.x = Phaser.Math.Clamp(s5.lucky.x, s5.leftBoundWorld, s5.rightBoundWorld);
-    if (s5.lucky.anims?.isPlaying) s5.lucky.stop();
-    s5.lucky.setTexture(s5.sitKey);
+    if (s5._dlg1) { try{s5._dlg1.remove(false);}catch{} s5._dlg1 = null; }
+    if (s5._dlg2) { try{s5._dlg2.remove(false);}catch{} s5._dlg2 = null; }
+    if (s5.loopEvt) { try{s5.loopEvt.remove(false);}catch{} s5.loopEvt = null; }
+
+    // Park Loky at nearest edge & idle
+    s5.loky.x = Phaser.Math.Clamp(s5.loky.x, s5.leftBoundWorld, s5.rightBoundWorld);
+    if (s5.loky.anims?.isPlaying) s5.loky.stop();
+    s5.loky.setTexture(s5.sitKey);
+
+    scene._controlsLocked = false;
+    scene._lockStopX = null;
 
     scene._s5 = null;
   },
 
-  update(){ /* handled in loop */ }
+  update(){ /* handled by loopEvt */ }
 },
 
 /* ===================== SCENE 6 — Sofía seated; Joaquín auto-walks to chair ===================== */
-/* ===================== SCENE 6 — Sofía seated; stop near, one-time cheers & chat + drone ===================== */
 6: {
   manifest: {
     images: [
       { key: 'scene6',              path: '/assets/scenes/scene6/scene6.png' },
+
+      // Sofía (seated triplet)
       { key: 's6_sofia_seated',     path: '/assets/sofia/casual/sofia_seated.png'  },
       { key: 's6_sofia_seated2',    path: '/assets/sofia/casual/sofia_seated2.png' },
       { key: 's6_sofia_seated3',    path: '/assets/sofia/casual/sofia_seated3.png' },
-      { key: 's6_drone',            path: '/assets/scenes/scene6/extra/drone.png' }
+
+      // Joaquín (seated triplet) — if your project uses different paths, adjust here.
+      { key: 's6_joaquin_seated',   path: '/assets/joaquin/casual/joaquin_seated.png'  },
+     
+      // Drone
+      { key: 's6_drone', path: '/assets/scenes/scene6/extra/drone.png' }
     ]
   },
 
@@ -906,53 +1142,65 @@
     // --- Tunables ---
     const SOFIA_SEAT_REL_X =  0.30;   // right chair (fraction of bg width from center)
     const SOFIA_SEAT_REL_Y = -90;     // px above rail (container origin is bottom-center)
-    const SOFIA_REL_W      =  0.140;  // Sofía width relative to bg width
+    const NPC_REL_W        =  0.140;  // seated sprite width relative to bg width
 
     const TRIGGER_RADIUS   = 120;     // when player is this close → stop & chat
-    const STOP_GAP         =  18;     // how close in front of Sofía the player stops
+    const STOP_GAP         =  18;     // how close in front of NPC the player stops
 
     // Drone path/sizing
-    const DRONE_REL_W  = 0.100;   // size relative to bg width
-    const DRONE_RX_REL = 0.35;    // ellipse radius X (fraction of bg width)
-    const DRONE_RY_REL = 0.18;    // ellipse radius Y
-    const DRONE_SPEED  = 0.20;    // radians per second (↓ to move slower)
-    const DRONE_CX_REL = 0.05;    // ellipse center X (fraction of bg width)
-    const DRONE_CY_REL = -0.28;   // ellipse center Y (fraction of bg width)
+    const DRONE_REL_W  = 0.100;
+    const DRONE_RX_REL = 0.35;
+    const DRONE_RY_REL = 0.18;
+    const DRONE_SPEED  = 0.20;    // radians per second
+    const DRONE_CX_REL = 0.05;
+    const DRONE_CY_REL = -0.28;
     // -----------------
 
     const baseTex = scene.textures.get('scene6');
     const src     = baseTex.getSourceImage();
     const baseW   = src.width;
 
-    // --- Sofía (idle seated) ---
-    const sof0W    = scene.textures.get('s6_sofia_seated').getSourceImage().width;
-    const sofScale = (SOFIA_REL_W * baseW) / sof0W;
+    // --- Decide who is NPC (seated) based on who the player is ---
+    const playerIsSofia = (GameState.character || 'joaquin') === 'sofia';
 
-    const seatLocalX = baseW * SOFIA_SEAT_REL_X;
-    const seatLocalY = SOFIA_SEAT_REL_Y;
+    // Prefer Joaquín-seated set when player is Sofía; otherwise Sofía-seated set.
+    const joaquinSet = ['s6_joaquin_seated'];
+    const sofiaSet   = ['s6_sofia_seated','s6_sofia_seated2','s6_sofia_seated3'];
 
-    const sofia = scene.add.sprite(seatLocalX, seatLocalY, 's6_sofia_seated')
-      .setOrigin(0.5, 1)
-      .setScale(sofScale)
-      .setDepth(5)
-      .setFlipX(true);
-    container.add(sofia);
+    // Check availability (graceful fallback to Sofía if Joaquín frames are missing)
+    const hasJoaquin = joaquinSet.every(k => scene.textures.exists(k));
+    const npcFrames  = playerIsSofia && hasJoaquin ? joaquinSet : sofiaSet;
 
-    // --- One-time “cheers” motion using the 3 seated frames ---
-    if (!scene.anims.exists('s6_sofia_toast')) {
+    // Create (or reuse) a toast animation unique to this chosen set
+    const toastKey = `s6_npc_toast_${npcFrames[0]}`;
+    if (!scene.anims.exists(toastKey)) {
       scene.anims.create({
-        key: 's6_sofia_toast',
+        key: toastKey,
         frames: [
-          { key:'s6_sofia_seated'  },
-          { key:'s6_sofia_seated2' },
-          { key:'s6_sofia_seated3' },
-          { key:'s6_sofia_seated2' },
-          { key:'s6_sofia_seated'  },
+          { key: npcFrames[0] },
+          { key: npcFrames[1] },
+          { key: npcFrames[2] },
+          { key: npcFrames[1] },
+          { key: npcFrames[0] },
         ],
         frameRate: 7,
         repeat: 0
       });
     }
+
+    // --- NPC (idle seated) ---
+    const npcBaseW = scene.textures.get(npcFrames[0]).getSourceImage().width;
+    const npcScale = (NPC_REL_W * baseW) / npcBaseW;
+
+    const seatLocalX = baseW * SOFIA_SEAT_REL_X;
+    const seatLocalY = SOFIA_SEAT_REL_Y;
+
+    const npc = scene.add.sprite(seatLocalX, seatLocalY, npcFrames[0])
+      .setOrigin(0.5, 1)
+      .setScale(npcScale)
+      .setDepth(5)
+      .setFlipX(true);
+    container.add(npc);
 
     // --- DRONE ---
     const dImgW   = scene.textures.get('s6_drone').getSourceImage().width;
@@ -968,7 +1216,9 @@
     // --- Scene 6 state ---
     scene._s6 = {
       container,
-      sofia,
+      npc,
+      npcFrames,
+      toastKey,
 
       // player-stop logic
       triggerRadius: TRIGGER_RADIUS,
@@ -977,12 +1227,12 @@
       locking: false,
       doneOnce: false,
 
-      // world helpers for Sofía
-      sofiaWorldX(){
+      // world helpers for NPC
+      npcWorldX(){
         const sx = container.scaleX || 1;
         return container.x + seatLocalX * sx;
       },
-      sofiaWorldY(){
+      npcWorldY(){
         const sy = container.scaleY || 1;
         return scene.railY + seatLocalY * sy;
       },
@@ -997,8 +1247,8 @@
       drone_cy: baseW * DRONE_CY_REL,
     };
 
-    // Proxy so _s4* bubble helpers work here too
-    scene._s4 = { container, npc: sofia, ui:null, uiFollow:null, bubble:null, npcBubble:null };
+    // Bubble proxy so _s4* helpers work here too
+    scene._s4 = { container, npc, ui:null, uiFollow:null, bubble:null, npcBubble:null };
     scene._s4_from6 = true;
   },
 
@@ -1006,7 +1256,7 @@
     const s6 = scene._s6; if (!s6) return;
 
     // Refresh bubble proxy on re-entry
-    scene._s4 = { container: s6.container, npc: s6.sofia, ui:null, uiFollow:null, bubble:null, npcBubble:null };
+    scene._s4 = { container: s6.container, npc: s6.npc, ui:null, uiFollow:null, bubble:null, npcBubble:null };
     scene._s4_from6 = true;
 
     // Reset state
@@ -1025,7 +1275,7 @@
     scene._controlsLocked = false;
     scene._lockStopX = null;
 
-    // Clean the proxy (don’t touch Scene 4’s real _s4)
+    // Clean the proxy
     if (scene._s4_from6 && scene._s4) {
       try {
         if (scene._s4.bubble?.destroy)    scene._s4.bubble.destroy(true);
@@ -1041,46 +1291,46 @@
 
     // --- DRONE: animate along an ellipse with a gentle bob/tilt ---
     if (s6.drone) {
-      s6.drone_t += s6.drone_speed * dt;     // ↓ change s6.drone_speed to 0.12 for slower movement
+      s6.drone_t += s6.drone_speed * dt;
       const a  = s6.drone_t;
       const x  = s6.drone_cx + s6.drone_rx * Math.cos(a);
       const y  = s6.drone_cy + s6.drone_ry * Math.sin(a) + 6 * Math.sin(a * 3);
       s6.drone.setPosition(x, y);
 
-      const dx = -s6.drone_rx * Math.sin(a); // derivative of x
+      const dx = -s6.drone_rx * Math.sin(a);
       s6.drone.setFlipX(dx < 0);
       s6.drone.rotation = 0.06 * Math.sin(a * 2);
     }
 
     // --- NPC faces the player ---
-    const sofX = s6.sofiaWorldX();
-    s6.sofia.setFlipX(scene.player.x < sofX);
+    const npcX = s6.npcWorldX();
+    s6.npc.setFlipX(scene.player.x < npcX);
 
-    // SAFETY: ensure the bubble proxy points at Sofía before we emit bubbles
-    if (!scene._s4 || scene._s4.npc !== s6.sofia) {
-      scene._s4 = { container: s6.container, npc: s6.sofia, ui:null, uiFollow:null, bubble:null, npcBubble:null };
+    // SAFETY: ensure the bubble proxy points at the current NPC
+    if (!scene._s4 || scene._s4.npc !== s6.npc) {
+      scene._s4 = { container: s6.container, npc: s6.npc, ui:null, uiFollow:null, bubble:null, npcBubble:null };
       scene._s4_from6 = true;
     }
 
-    // Stop here if we already ran the toast+chat once this entry
+    // Stop if we already ran the toast+chat once this entry
     if (s6.doneOnce) return;
 
     // --- Proximity → lock, stop, toast & chat ---
-    const dxP = Math.abs(scene.player.x - sofX);
+    const dxP = Math.abs(scene.player.x - npcX);
     if (!s6.locking && dxP <= s6.triggerRadius) {
       s6.locking = true;
       scene._controlsLocked = true;
-      scene._lockStopX = (scene.player.x < sofX) ? (sofX - s6.stopGap) : (sofX + s6.stopGap);
+      scene._lockStopX = (scene.player.x < npcX) ? (npcX - s6.stopGap) : (npcX + s6.stopGap);
 
       // Freeze player in idle
       const who = GameState.character || 'joaquin';
       scene.player.stop().setTexture(scene._idleKey || `${who}_idle`);
       scene.isMoving = false;
 
-      // One-shot cheers
-      s6.sofia.play('s6_sofia_toast');
+      // One-shot cheers (chosen set)
+      s6.npc.play(s6.toastKey);
 
-      // Chat bubbles
+      // Chat bubbles (same lines; NPC speaks first)
       const timers = [];
       timers.push(scene.time.delayedCall(300, () => {
         _s4ShowNpcBubble(scene, "Feliz aniversario, amor");
@@ -1100,61 +1350,75 @@
     }
   },
 },
-/* ===================== SCENE 7 — Tall building, Sofía standing + Loky sitting ===================== */
 /* ===================== SCENE 7 — Sofía center + Loky sitting + Nala follower ===================== */
 7: {
   manifest: {
     images: [
-      { key:'scene7',     path:'/assets/scenes/scene7/scene7.png' },
-      { key:'s7_sofia',   path:'/assets/sofia/casual/sofia_standing.png' },
-      { key:'s7_lokySit', path:'/assets/loky/loky_sitting.png' },
+      { key:'scene7',       path:'/assets/scenes/scene7/scene7.png' },
 
-      // Nala (robust to your filenames)
+      // NPC variants (we’ll pick depending on who’s playable)
+      { key:'s7_sofia',     path:'/assets/sofia/casual/sofia_standing.png' },
+      { key:'s7_joaquin',   path:'/assets/joaquin/casual/joaquin_standing.png' },
+
+      // Loky (sitting)
+      { key:'s7_lokySit',   path:'/assets/loky/loky_sitting.png' },
+
+      // Nala (robust to your filenames; standing preferred)
       { key:'nala_walk1',   path:'/assets/nala/nala_walking1.png' },
       { key:'nala_walk2',   path:'/assets/nala/nala_walking2.png' },
       { key:'nala_walk3',   path:'/assets/nala/nala_walking3.png' },
-      { key:'nala_stand',   path:'/assets/nala/nala_standing.png' },        // preferred
+      { key:'nala_stand',   path:'/assets/nala/nala_standing.png' },
+      // (Optional alt stand) { key:'nala_stand2', path:'/assets/nala/nala_standing2.png' },
     ]
   },
 
   build(scene, container){
-    // Base sizes
+    // ----- Base sizes -----
     const baseImg = scene.textures.get('scene7').getSourceImage();
     const baseW   = baseImg.width;
 
-    // ---------- Tunables ----------
-    const SOFIA_REL_W   = 0.085; // Sofía width vs. bg width
-    const LOKY_REL_W    = 0.035; // Loky width vs. bg width
-    const LOKY_OFFSET_X = 70;    // px from Sofía (container-local, before scale)
-    const BOB_PX        = 3;     // breathing bob amount
+    // ----- Tunables -----
+    const NPC_REL_W        = 0.085;   // Sofia/Joaquin width vs bg
+    const NPC_IDLE_BOB_PX  = 3;       // subtle breathing
+    const LOKY_REL_W       = 0.035;
+    const LOKY_OFFSET_X    = 70;      // px from NPC (container-local, pre-scale)
 
-    // Nala follower (same feel as Scene 5 Loky)
-    const NALA_REL_W      = 0.090;
-    const NALA_FOLLOW_GAP = 26;
-    const NALA_LERP       = 0.20;
-    const NALA_APPROACH   = 120;   // px/s for first approach
-    const NALA_MOVE_EPS   = 0.02;
-    // ------------------------------
+    const TRIGGER_RADIUS   = 140;     // when player is this close → stop & dialog
+    const STOP_GAP         =  22;     // where player stops relative to NPC
 
-    // Sofía (center)
-    const sofiaW  = scene.textures.get('s7_sofia').getSourceImage().width;
-    const sofia   = scene.add.sprite(0, 0, 's7_sofia')
+    // Nala follower (scene5-like)
+    const NALA_REL_W       = 0.090;
+    const NALA_FOLLOW_GAP  = 26;
+    const NALA_LERP        = 0.20;
+    const NALA_APPROACH    = 120;     // px/s on first approach
+    const NALA_MOVE_EPS    = 0.02;
+    // ---------------------
+
+    // ----- Decide who is playable & who is NPC -----
+    // If Sofía is the playable character → NPC = Joaquín; else NPC = Sofía.
+    const playableIsSofia = (GameState.character === 'sofia');
+    const npcKey = playableIsSofia
+      ? (scene.textures.exists('s7_joaquin') ? 's7_joaquin' : 's7_sofia')  // fallback if Joaquin art missing
+      : 's7_sofia';
+
+    const npcW  = scene.textures.get(npcKey).getSourceImage().width;
+    const npc   = scene.add.sprite(0, 0, npcKey)
       .setOrigin(0.5, 1)
-      .setScale((SOFIA_REL_W * baseW) / sofiaW)
+      .setScale((NPC_REL_W * baseW) / npcW)
       .setDepth(5);
-    container.add(sofia);
+    container.add(npc);
 
-    // Idle bob for Sofía
+    // Idle bob for NPC
     scene.tweens.add({
-      targets: sofia,
-      y: `-=${BOB_PX}`,
+      targets: npc,
+      y: `-=${NPC_IDLE_BOB_PX}`,
       duration: 2200,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut'
     });
 
-    // Loky (sitting) next to Sofía
+    // Loky sitting next to NPC
     const lokyW = scene.textures.get('s7_lokySit').getSourceImage().width;
     const loky  = scene.add.sprite(LOKY_OFFSET_X, 0, 's7_lokySit')
       .setOrigin(0.5, 1)
@@ -1162,35 +1426,33 @@
       .setDepth(4);
     container.add(loky);
 
-    // ---------- NALA (build anim + sprite) ----------
- // Choose idle frame (standing preferred; fallback to walk1)
-const idleKey = scene.textures.exists('nala_stand') ? 'nala_stand'
-              : scene.textures.exists('nala_stand2') ? 'nala_stand2'
-              : 'nala_walk1';
+    // ----- NALA (build anim + sprite with fallbacks) -----
+    // Choose idle frame (standing preferred; fallback to walk1)
+    const idleKey = scene.textures.exists('nala_stand') ? 'nala_stand'
+                  : (scene.textures.exists('nala_stand2') ? 'nala_stand2' : 'nala_walk1');
 
-// Create walk animation from frames 1..3 (fallbacks handled)
-if (!scene.anims.exists('nala_walk_anim')) {
-  const has = k => scene.textures.exists(k);
-  const f = [];
-  if (has('nala_walk1')) f.push({ key:'nala_walk1' });
-  if (has('nala_walk2')) f.push({ key:'nala_walk2' });
-  if (has('nala_walk3')) f.push({ key:'nala_walk3' });
+    // Create walk animation robustly
+    if (!scene.anims.exists('nala_walk_anim')) {
+      const has = k => scene.textures.exists(k);
+      const raw = [];
+      if (has('nala_walk1')) raw.push({ key:'nala_walk1' });
+      if (has('nala_walk2')) raw.push({ key:'nala_walk2' });
+      if (has('nala_walk3')) raw.push({ key:'nala_walk3' });
 
-  // If any are missing, fall back to idle so we still animate
-  if (f.length === 0) f.push({ key: idleKey });
-  if (f.length === 1) f.push(f[0]); // ensure at least 2 frames
+      // Fallbacks so animation always exists
+      if (raw.length === 0) raw.push({ key: idleKey });
+      if (raw.length === 1) raw.push(raw[0]); // at least 2 frames
 
-  // Use a smooth ping-pong style: 1 → 2 → 3 → 2 → (loop)
-  const frames = (f.length >= 3) ? [f[0], f[1], f[2], f[1]] : f;
+      // Ping-pong walk: 1→2→3→2→loop (if 3 frames exist)
+      const frames = (raw.length >= 3) ? [raw[0], raw[1], raw[2], raw[1]] : raw;
 
-  scene.anims.create({
-    key: 'nala_walk_anim',
-    frames,
-    frameRate: 10,   // tweak to taste
-    repeat: -1
-  });
-}
-
+      scene.anims.create({
+        key: 'nala_walk_anim',
+        frames,
+        frameRate: 10,
+        repeat: -1
+      });
+    }
 
     const nW = scene.textures.get(idleKey).getSourceImage().width;
     const nala = scene.add.sprite(-baseW * 0.35, 0, idleKey)
@@ -1198,11 +1460,17 @@ if (!scene.anims.exists('nala_walk_anim')) {
       .setScale((NALA_REL_W * baseW) / nW)
       .setDepth(4);
     container.add(nala);
-    // -----------------------------------------------
 
-    // Save refs + follower state (bounds computed on enter)
+    // ----- Save state -----
     scene._s7 = {
-      container, sofia, loky,
+      container, npc, loky,
+
+      // dialog triggers
+      triggerRadius: TRIGGER_RADIUS,
+      stopGap: STOP_GAP,
+      dialogDone: false,
+      timers: [],
+
       // Nala follower state
       nala,
       nala_promoted: false,
@@ -1211,26 +1479,27 @@ if (!scene.anims.exists('nala_walk_anim')) {
       nala_lerp: NALA_LERP,
       nala_approachSpeed: NALA_APPROACH,
       nala_moveEps: NALA_MOVE_EPS,
-      nala_mode: 'idle', // 'idle' -> 'approachOnce' -> 'follow'
+      nala_mode: 'idle', // 'idle' → 'approachOnce' → 'follow'
       nala_leftBoundWorld: 0,
-      nala_rightBoundWorld: 0
+      nala_rightBoundWorld: 0,
     };
   },
 
   enter(scene){
     const s7 = scene._s7; if (!s7) return;
 
-    // Recompute world bounds of this scene (resize safe)
+    // Recompute world bounds (resize safe)
     const baseImg = scene.textures.get('scene7').getSourceImage();
     const sx = s7.container.scaleX || 1;
     const halfWorld = (baseImg.width * sx) * 0.5;
     s7.nala_leftBoundWorld  = s7.container.x - halfWorld;
     s7.nala_rightBoundWorld = s7.container.x + halfWorld;
 
-    // Promote Nala to world space (keep scale)
+    // Promote Nala to world space (so she follows independently of parallax)
     if (!s7.nala_promoted) {
       const sxC = s7.container.scaleX || 1;
       const worldX = s7.container.x + s7.nala.x * sxC;
+
       s7.container.remove(s7.nala);
       s7.nala.x = worldX;
       s7.nala.y = scene.railY;
@@ -1239,14 +1508,21 @@ if (!scene.anims.exists('nala_walk_anim')) {
       s7.nala_promoted = true;
     }
 
-    // Start idle
+    // Reset dialog & nala to idle
+    s7.dialogDone = false;
     s7.nala.setTexture(s7.nala_idleKey);
     s7.nala_mode = 'idle';
+
+    // Make sure bubble proxy points at the current NPC
+    scene._s4 = { container: s7.container, npc: s7.npc, ui:null, uiFollow:null, bubble:null, npcBubble:null };
   },
 
   leave(scene){
     const s7 = scene._s7;
     if (s7) {
+      (s7.timers||[]).forEach(t => { try { t.remove(false); } catch(_){} });
+      s7.timers = [];
+
       // Park Nala at nearest edge + idle
       s7.nala.x = Phaser.Math.Clamp(s7.nala.x, s7.nala_leftBoundWorld, s7.nala_rightBoundWorld);
       if (s7.nala.anims?.isPlaying) s7.nala.stop();
@@ -1258,17 +1534,59 @@ if (!scene.anims.exists('nala_walk_anim')) {
   update(scene, dt = 0.016){
     const s7 = scene._s7; if (!s7) return;
 
-    // Face Sofía & Loky toward player (nice touch)
+    // Face NPC & Loky toward player
     const sx = s7.container.scaleX || 1;
-    const sofWorldX = s7.container.x + (s7.sofia.x * sx);
-    const playerLeft = scene.player.x < sofWorldX;
-    s7.sofia.setFlipX(playerLeft);
+    const npcWorldX = s7.container.x + (s7.npc.x * sx);
+    const playerLeft = scene.player.x < npcWorldX;
+    s7.npc.setFlipX(playerLeft);
     s7.loky.setFlipX(playerLeft);
 
-    // ---------- Nala follower (Scene5-style) ----------
-    const inside = (scene.player.x >= s7.nala_leftBoundWorld && scene.player.x <= s7.nala_rightBoundWorld);
+    // Ensure bubble proxy aims at NPC (safety on reloads)
+    if (!scene._s4 || scene._s4.npc !== s7.npc) {
+      scene._s4 = { container: s7.container, npc: s7.npc, ui:null, uiFollow:null, bubble:null, npcBubble:null };
+    }
+
+    // ---------- Dialog trigger ----------
+    if (!s7.dialogDone && Math.abs(scene.player.x - npcWorldX) <= s7.triggerRadius) {
+      s7.dialogDone = true;
+
+      // Lock player & stop near NPC
+      scene._controlsLocked = true;
+      scene._lockStopX = (scene.player.x < npcWorldX)
+        ? (npcWorldX - s7.stopGap)
+        : (npcWorldX + s7.stopGap);
+
+      // Freeze player in idle
+      const who = GameState.character || 'joaquin';
+      scene.player.stop().setTexture(scene._idleKey || `${who}_idle`);
+      scene.isMoving = false;
+
+      // NPC speaks first
+      _s4ShowNpcBubble(scene, "Ahora somos 4");
+
+      // After ~2s, both say “¡Bienvenida Nala!” simultaneously
+      const t1 = scene.time.delayedCall(2000, () => {
+        _s4ShowNpcBubble(scene, "¡Bienvenida Nala!");
+        _s4ShowBubble(scene, "¡Bienvenida Nala!");
+      });
+
+      // Unlock controls after both lines fade (~ additional 2.2s)
+      const t2 = scene.time.delayedCall(4200, () => {
+        scene._controlsLocked = false;
+        scene._lockStopX = null;
+      });
+
+      s7.timers = [t1, t2];
+    }
+
+    // ---------- Nala follower ----------
+    const inside = (
+      scene.player.x >= s7.nala_leftBoundWorld &&
+      scene.player.x <= s7.nala_rightBoundWorld
+    );
 
     if (!inside) {
+      // park at nearest edge & idle
       const atLeft = scene.player.x < s7.nala_leftBoundWorld;
       s7.nala.x = atLeft ? s7.nala_leftBoundWorld : s7.nala_rightBoundWorld;
       if (s7.nala.anims?.isPlaying) s7.nala.stop();
@@ -1285,26 +1603,29 @@ if (!scene.anims.exists('nala_walk_anim')) {
     const targetX  = scene.player.x + (scene.player.flipX ? -gap : gap);
     const desiredX = Phaser.Math.Clamp(targetX, s7.nala_leftBoundWorld, s7.nala_rightBoundWorld);
 
-    // Face the movement direction
+    // Face movement dir
     s7.nala.setFlipX(desiredX < s7.nala.x);
 
     // Move
     const prevX = s7.nala.x;
     let nextX   = prevX;
+
     if (s7.nala_mode === 'approachOnce') {
       const step  = s7.nala_approachSpeed * dt;
       const delta = Phaser.Math.Clamp(desiredX - prevX, -step, step);
       nextX = prevX + delta;
-    } else { // follow mode
+    } else {
       nextX = Phaser.Math.Linear(prevX, desiredX, s7.nala_lerp);
     }
 
-    const moved = Math.abs(nextX - prevX) > s7.nala_moveEps;
+    const moved = Math.abs(nextX - prevX) > (s7.nala_moveEps * 0.5); // slightly looser
     if (moved) {
-      if (!s7.nala.anims?.currentAnim || s7.nala.anims.currentAnim.key !== 'nala_walk_anim') {
+      // Ensure walk animation is playing
+      if (!s7.nala.anims?.isPlaying || s7.nala.anims.currentAnim?.key !== 'nala_walk_anim') {
         if (scene.anims.exists('nala_walk_anim')) s7.nala.play('nala_walk_anim', true);
       }
-      // Optional: sync to player's gait when player is moving
+
+      // Optional: sync gait to player's when moving
       if (scene.isMoving && scene.player.anims?.currentAnim && s7.nala.anims?.currentAnim) {
         const pf = scene.player.anims.currentFrame;
         const da = s7.nala.anims.currentAnim;
@@ -1320,8 +1641,8 @@ if (!scene.anims.exists('nala_walk_anim')) {
 
     s7.nala.x = nextX;
 
-    // Switch to follow when close to target
-    if (s7.nala_mode === 'approachOnce' && Math.abs(desiredX - nextX) <= (s7.nala_moveEps * 2)) {
+    // Switch to follow when close enough
+    if (s7.nala_mode === 'approachOnce' && Math.abs(desiredX - nextX) <= (s7.nala_moveEps * 3)) {
       s7.nala_mode = 'follow';
     }
   },
@@ -2338,6 +2659,9 @@ if (!this.textures.exists('joaquin_wedd')) {
 
       this.thoughtBubble.setPosition(this.player.x, this.player.y - this.player.displayHeight - 40);
       this.help.setPosition(this.player.x, this.player.y - this.player.displayHeight - 8);
+
+      if (this._enforceScale) this._enforceScale();
+
     }
 
     _drawGround(){
@@ -2401,6 +2725,41 @@ if (!this.textures.exists('joaquin_wedd')) {
       }
     }
 
+
+    _addStaticSceneTitle(container, baseKey, index){
+  const src = this.textures.get(baseKey).getSourceImage();
+  const label = (ZONE_TITLES[index] || `scene ${index}`).toUpperCase();
+
+  // Local position: centered X, near the top edge of the background
+  const localX = 0;
+  const localY = -src.height + 40; // 40px below top (container origin is bottom-center)
+
+  // Base font size & stroke get scaled by the container (nice “pixel” feel)
+  const baseFontSize = 60;
+  const strokeW = 10;
+
+  const t = this.add.text(localX, localY, label, {
+    fontFamily: 'monospace',
+    fontSize: baseFontSize,
+    color: '#ffffff',
+    align: 'center',
+    letterSpacing: 1
+  })
+  .setOrigin(0.5, 0)    // centered, top-aligned
+  .setDepth(10)         // above the background inside the container
+  .setStroke('#000000', strokeW)
+  .setShadow(
+    0,
+    Math.max(2, Math.round(strokeW * 0.6)),
+    '#000000',
+    Math.max(6, Math.round(strokeW * 1.6)),
+    true,
+    true
+  );
+
+  container.add(t); // attach to container so it scales/moves with the scene
+}
+
     _buildZone(index, def){
       const old = this.zone.containers[index-1];
       if (old) old.destroy(true);
@@ -2437,6 +2796,8 @@ if (!this.textures.exists('joaquin_wedd')) {
 
       this.zone.containers[index-1] = container;
       this.zone.loaded.add(index);
+
+      this._addStaticSceneTitle(container, baseKey, index);
     }
 
    _destroyZone(index){
@@ -2477,27 +2838,45 @@ if (!this.textures.exists('joaquin_wedd')) {
       return animKey;
     }
 
-    _applyOutfit(mode){
-      if (this._currentOutfit === mode) return;
-      const who = GameState.character || 'joaquin';
+_applyOutfit(mode){
+  if (this._currentOutfit === mode) return;
 
-      if (mode === 'casual') {
-        const casualWalkKey = this._buildCasualWalkAnimIfNeeded();
-        this._walkKey = casualWalkKey;
-        this._idleKey = `${who}_idle_casual`;
-      } else {
-        this._ensureWalkAnim(who);
-        this._walkKey = `${who}_walk`;
-        this._idleKey = `${who}_idle`;
-      }
-      this._currentOutfit = mode;
+  const who = GameState.character || 'joaquin';
 
-      if (this.isMoving) {
-        this.player.play(this._walkKey, true);
-      } else {
-        this.player.stop().setTexture(this._idleKey);
-      }
-    }
+  if (mode === 'casual') {
+    const animKey = this._buildCasualWalkAnimIfNeeded();
+    this._walkKey = animKey;
+    this._idleKey = `${who}_idle_casual`;
+  } else {
+    this._ensureWalkAnim(who);
+    this._walkKey = `${who}_walk`;
+    this._idleKey = `${who}_idle`;
+  }
+
+  // >>> definitive scales <<<
+  // >>> definitive scales <<<
+const scaleMap = {
+  joaquin: { primary: 0.20, casual: 0.20 },
+  sofia:   { primary: 0.18, casual: 0.05 }, // <-- Sofía "casual" más pequeña
+};
+const target = (scaleMap[who]?.[mode]) ?? 0.20;
+
+this.player.setScale(target);
+this._currentOutfit = mode;
+
+// guard: if some scene tweaks scale, we snap back next frame
+this._enforceScale = () => {
+  if (Math.abs(this.player.scaleX - target) > 0.0001) {
+    this.player.setScale(target);
+  }
+};
+
+
+  if (this.isMoving) this.player.play(this._walkKey, true);
+  else this.player.stop().setTexture(this._idleKey);
+}
+
+
   }
 
   new Phaser.Game({
