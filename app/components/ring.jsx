@@ -2,28 +2,28 @@ import React, { useEffect, useMemo, useRef } from "react";
 
 /**
  * Ultra-smooth 360° image player (imperative, no per-frame React re-render).
+ * Fully responsive when placed inside a sized container (width/height 100%).
  */
 export default function RingAuto360({
   folder = "/assets/ring",
   prefix = "ring",
   startIndex = 1,
-  frames,
+  frames = 96,
   ext = "png",
   fps = 24,
-  width = 360,
-  height = 360,
+  width = "100%",   // ✅ por defecto toma el 100% del contenedor
+  height = "100%",  // ✅ por defecto toma el 100% del contenedor
   alt = "Rotating ring",
   className = "",
-  // Optional: start/stop control
   autoplay = true,
 }) {
-  // Build URLs once per prop set
+  // Normalize width/height to CSS strings
+  const norm = (v) => (typeof v === "number" ? `${v}px` : v);
+
   const urls = useMemo(() => {
     const base = folder.replace(/\/$/, "");
-    return Array.from(
-      { length: frames ?? 0 },
-      (_, i) => `${base}/${prefix}${startIndex + i}.${ext}`
-    );
+    const len = Math.max(0, frames);
+    return Array.from({ length: len }, (_, i) => `${base}/${prefix}${startIndex + i}.${ext}`);
   }, [folder, prefix, startIndex, frames, ext]);
 
   const imgRef = useRef(null);
@@ -32,18 +32,18 @@ export default function RingAuto360({
   const accRef = useRef(0);
   const frameRef = useRef(0);
   const runningRef = useRef(false);
-  const visibleRef = useRef(true);      // document visibility
-  const inViewRef = useRef(true);       // intersection visibility
-  const decodedImagesRef = useRef([]);  // preloaded Image objects
+  const visibleRef = useRef(true);
+  const inViewRef = useRef(true);
+  const decodedImagesRef = useRef([]);
 
-  // Preload & decode all frames
+  // Preload & decode
   useEffect(() => {
     let cancelled = false;
     decodedImagesRef.current = [];
 
     async function loadAll() {
       if (!urls.length) return;
-      // Prime a couple of neighbors quickly
+
       const prime = [0, 1 % urls.length, (urls.length - 1) % urls.length];
       const primeSet = new Set(prime);
 
@@ -53,40 +53,32 @@ export default function RingAuto360({
           img.decoding = "async";
           img.loading = "eager";
           img.src = src;
-          img.decode?.().catch(() => {})  // decode may reject, ignore
-            .finally(() => resolve(img));
+          img.decode?.().catch(() => {}).finally(() => resolve(img));
         });
 
-      // Load prime frames first
-      const primeImgs = await Promise.all(prime.map(i => loadOne(urls[i])));
+      const primeImgs = await Promise.all(prime.map((i) => loadOne(urls[i])));
       if (cancelled) return;
       primeImgs.forEach((img, idx) => (decodedImagesRef.current[prime[idx]] = img));
 
-      // Fill the rest
-      const promises = [];
-      for (let i = 0; i < urls.length; i++) {
-        if (primeSet.has(i)) continue;
-        promises.push(
-          loadOne(urls[i]).then(img => {
-            decodedImagesRef.current[i] = img;
-          })
-        );
-      }
-      await Promise.all(promises);
+      await Promise.all(
+        urls.map(async (u, i) => {
+          if (primeSet.has(i)) return;
+          const img = await loadOne(u);
+          if (!cancelled) decodedImagesRef.current[i] = img;
+        })
+      );
       if (cancelled) return;
 
-      // Set initial src once preloaded at least the first frame
-      const tag = imgRef.current;
-      if (tag) {
-        tag.src = urls[0];
-      }
+      if (imgRef.current) imgRef.current.src = urls[0];
     }
 
     loadAll();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [urls]);
 
-  // rAF loop (imperative; no setState per frame)
+  // rAF loop
   useEffect(() => {
     if (!urls.length) return;
     const interval = 1000 / Math.max(1, fps);
@@ -95,7 +87,6 @@ export default function RingAuto360({
       if (!runningRef.current) return;
       if (!lastTimeRef.current) lastTimeRef.current = t;
 
-      // If not visible or not in view, skip advancing frames
       if (!visibleRef.current || !inViewRef.current) {
         rafRef.current = requestAnimationFrame(tick);
         return;
@@ -105,7 +96,6 @@ export default function RingAuto360({
       lastTimeRef.current = t;
       accRef.current += dt;
 
-      // Advance as many frames as needed to catch up
       if (accRef.current >= interval) {
         const steps = Math.floor(accRef.current / interval);
         accRef.current -= steps * interval;
@@ -115,11 +105,7 @@ export default function RingAuto360({
           frameRef.current = (frameRef.current + steps) % len;
           const tag = imgRef.current;
           const decoded = decodedImagesRef.current[frameRef.current];
-          if (tag) {
-            // If decoded exists, use it; otherwise fallback to URL (still okay)
-            if (decoded?.src) tag.src = decoded.src;
-            else tag.src = urls[frameRef.current];
-          }
+          if (tag) tag.src = decoded?.src || urls[frameRef.current];
         }
       }
 
@@ -141,17 +127,12 @@ export default function RingAuto360({
       rafRef.current = null;
     };
 
-    // Page visibility
     const onVis = () => {
       visibleRef.current = !document.hidden;
-      if (visibleRef.current && autoplay) {
-        // reset cadence
-        lastTimeRef.current = 0;
-      }
+      if (visibleRef.current && autoplay) lastTimeRef.current = 0;
     };
     document.addEventListener("visibilitychange", onVis);
 
-    // Intersection (pause when off-screen)
     const target = imgRef.current?.parentElement || imgRef.current;
     let observer;
     if (target && "IntersectionObserver" in window) {
@@ -159,11 +140,11 @@ export default function RingAuto360({
         (entries) => {
           inViewRef.current = entries[0]?.isIntersecting ?? true;
         },
-        { threshold: 0.01 }
+        { threshold: 0.01, rootMargin: "100px" }
       );
       observer.observe(target);
     } else {
-      inViewRef.current = true; // fallback
+      inViewRef.current = true;
     }
 
     if (autoplay) start();
@@ -176,11 +157,10 @@ export default function RingAuto360({
   }, [urls, fps, autoplay]);
 
   const style = {
-    width,
-    height,
+    width: norm(width),
+    height: norm(height),
     display: "inline-block",
     userSelect: "none",
-    // Helps the browser allocate compositing resources early
     willChange: "contents",
   };
 
@@ -190,7 +170,13 @@ export default function RingAuto360({
         ref={imgRef}
         alt={alt}
         draggable={false}
-        style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          display: "block",
+          pointerEvents: "none",
+        }}
       />
     </div>
   );

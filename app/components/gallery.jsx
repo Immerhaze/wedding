@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 export default function Gallery({
   initialPhotos = [],
-  title = 'Guest Gallery',
+  title = 'Galeria de Momentos',
   onUpload, // opcional; si no lo pasas, usamos POST /api/guest-photos
 }) {
   const [photos, setPhotos] = useState(initialPhotos);
