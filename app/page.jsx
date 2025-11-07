@@ -1,94 +1,137 @@
-'use client'
+'use client';
 
-import { useRef, useState, useEffect } from 'react'
-import NavBar from './components/navbar'
-import RingAuto360 from './components/ring'
-import Gallery from './components/gallery'
+import { useEffect, useRef, useState, useCallback } from 'react';
+import NavBar from './components/navbar';
+import RingAuto360 from './components/ring';
+import Gallery from './components/gallery';
+
+// Robust iOS / iPadOS detection (for copy text only)
+const IS_IOS =
+  typeof navigator !== 'undefined' &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
 function ScrollableIframe({ src, title }) {
-  const iframeRef = useRef(null)
-  const [active, setActive] = useState(false)
+  const iframeRef = useRef(null);
+  const [active, setActive] = useState(false);
+
+  // ESC to exit on desktop
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e) => e.key === 'Escape' && setActive(false);
+    window.addEventListener('keydown', onKey, { passive: true });
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active]);
+
+  // Focus frame when activated (helps keyboard/game events)
+  useEffect(() => {
+    if (!active || !iframeRef.current) return;
+    const t = setTimeout(() => {
+      try {
+        iframeRef.current.focus();
+      } catch {}
+    }, 30);
+    return () => clearTimeout(t);
+  }, [active]);
+
+  const onBlurFrame = useCallback(() => {
+    // optionally auto-exit: setActive(false);
+  }, []);
 
   return (
-    <div className="relative w-full h-full min-h-[60svh] rounded-2xl overflow-hidden shadow-xl">
-      {/* Game iframe */}
+    <div
+      className={[
+        'relative w-full h-full rounded-2xl overflow-hidden shadow-xl',
+        // min-height fallbacks: vh → svh → dvh
+        'min-h-[60vh]',
+        'supports-[min-height:60svh]:min-h-[60svh]',
+        'supports-[min-height:60dvh]:min-h-[60dvh]',
+        active ? 'overscroll-contain touch-pan-x touch-pan-y' : '',
+      ].join(' ')}
+      style={{
+        WebkitOverflowScrolling: 'auto',
+        overscrollBehavior: active ? 'contain' : undefined,
+      }}
+    >
       <iframe
         ref={iframeRef}
         src={src}
         title={title}
-        className="w-full h-full border-0"
-        allow="autoplay; fullscreen"
-        loading="lazy"
+        className="w-full h-full border-0 outline-none block"
+        // Permissions friendly to Phaser inputs
+        allow="autoplay; fullscreen; gamepad; clipboard-read; clipboard-write; xr-spatial-tracking; accelerometer; gyroscope"
+        sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-popups allow-modals"
+        allowFullScreen
+        loading="eager"
+        aria-live="off"
+        tabIndex={active ? 0 : -1}
         style={{
           overflow: 'hidden',
           pointerEvents: active ? 'auto' : 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none',
+          touchAction: active ? 'none' : 'auto',
+          overscrollBehavior: 'none',
         }}
+        onBlur={onBlurFrame}
       />
 
-      {/* Overlay when not active */}
       {!active && (
         <button
           type="button"
           className="absolute inset-0 cursor-pointer bg-black/40 backdrop-blur-[1px] flex items-center justify-center"
           onClick={() => setActive(true)}
-          aria-label="Click to activate game"
+          aria-label="Activar juego"
         >
           <span className="text-base sm:text-lg md:text-xl font-semibold text-white bg-black/60 px-4 py-2 rounded-lg shadow">
-            Click to Play
+            {IS_IOS ? 'Toca para jugar' : 'Click to Play'}
           </span>
         </button>
       )}
 
-      {/* Exit button when active */}
       {active && (
         <button
           onClick={() => setActive(false)}
           className="absolute top-3 right-3 z-10 bg-black/70 text-white px-3 py-1 rounded-md hover:bg-black/90 text-sm"
+          aria-label="Salir del juego"
         >
           Exit
         </button>
       )}
     </div>
-  )
+  );
 }
 
 export default function Home() {
-  const handleStart = () => {
-    const el = document.getElementById('game')
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  const ampRef = useRef(null);
+  const [ringPx, setRingPx] = useState(0);
 
-  // --- 🔽 Ring del mismo tamaño que el “&” (ligeramente menor para no cubrir) ---
-  const ampRef = useRef(null)
-  const [ringPx, setRingPx] = useState(0)
-
+  // Size the 360° ring to the "&" glyph
   useEffect(() => {
-    if (!ampRef.current) return
-    const SCALE = 0.92 // más pequeño que el “&” para minimizar solape
-    const el = ampRef.current
+    if (!ampRef.current) return;
+    const SCALE = 0.92;
+    const el = ampRef.current;
 
     const measure = () => {
-      const r = el.getBoundingClientRect()
-      const size = Math.ceil(Math.max(r.width, r.height) * SCALE)
-      setRingPx(size)
-    }
+      const r = el.getBoundingClientRect();
+      const size = Math.ceil(Math.max(r.width, r.height) * SCALE);
+      setRingPx(size);
+    };
 
-    measure()
-    const onResize = () => measure()
-    window.addEventListener('resize', onResize, { passive: true })
+    measure();
+    const onResize = () => measure();
+    window.addEventListener('resize', onResize, { passive: true });
 
-    let ro
+    let ro;
     if ('ResizeObserver' in window) {
-      ro = new ResizeObserver(measure)
-      ro.observe(el)
+      ro = new ResizeObserver(measure);
+      ro.observe(el);
     }
-
     return () => {
-      window.removeEventListener('resize', onResize)
-      ro?.disconnect()
-    }
-  }, [])
-  // --- 🔼 ---
+      window.removeEventListener('resize', onResize);
+      ro?.disconnect();
+    };
+  }, []);
 
   return (
     <main className="w-screen max-w-screen overflow-x-hidden">
@@ -96,14 +139,18 @@ export default function Home() {
 
       {/* HERO */}
       <section
-        className="relative w-full min-h-[100svh] sm:min-h-screen flex items-center justify-center overflow-hidden"
+        className={[
+          'relative w-full flex items-center justify-center overflow-hidden',
+          // full-height fallbacks: vh → svh → dvh
+          'min-h-[100vh]',
+          'supports-[min-height:100svh]:min-h-[100svh]',
+          'supports-[min-height:100dvh]:min-h-[100dvh]',
+        ].join(' ')}
         aria-label="Hero"
       >
-        {/* Decorative background */}
+        {/* Background */}
         <div aria-hidden className="absolute inset-0 -z-10">
-          {/* Gradient base */}
           <div className="absolute inset-0 bg-[radial-gradient(60%_60%_at_50%_40%,rgba(255,255,255,0.25)_0%,rgba(255,255,255,0)_60%),linear-gradient(180deg,#0b0b10_0%,#151521_50%,#0b0b10_100%)]" />
-          {/* Glow accents */}
           <div className="absolute -top-24 left-1/2 -translate-x-1/2 h-72 w-72 rounded-full blur-3xl opacity-40 bg-[#f8d776]" />
         </div>
 
@@ -120,14 +167,13 @@ export default function Home() {
           </h1>
         </div>
 
-        {/* 360° Ring behind text, responsive & sized to “&” */}
+        {/* 360° Ring */}
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div
             className="relative opacity-90"
             style={{
               width: ringPx ? `${ringPx}px` : undefined,
               height: ringPx ? `${ringPx}px` : undefined,
-              // límites sanos para extremos
               minWidth: '120px',
               minHeight: '120px',
               maxWidth: '70vw',
@@ -140,7 +186,7 @@ export default function Home() {
               prefix="ring"
               startIndex={1}
               frames={96}
-              ext="png"
+              ext="png" // PNG is fine
               fps={30}
               width="100%"
               height="100%"
@@ -151,40 +197,53 @@ export default function Home() {
       </section>
 
       {/* GAME */}
-    {/* GAME */}
-<section
-  id="game"
-  className="relative w-full min-h-[100svh] sm:min-h-screen px-0 py-10 sm:py-14 overflow-x-clip overflow-y-hidden"
-  aria-label="Game"
->
-  {/* Decorative background for game section */}
-  <div aria-hidden className="absolute inset-0 -z-10">
-    <div className="absolute inset-0 bg-[linear-gradient(180deg,#0b0b10_0%,#0f172a_40%,#0b0b10_100%)]" />
-    <div className="absolute inset-0 opacity-[0.06] [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.35)_1px,transparent_1.2px)] [background-size:24px_24px]" />
-  </div>
+      <section
+        id="game"
+        className={[
+          'relative w-full px-0 py-10 sm:py-14 overflow-x-hidden overflow-y-visible',
+          'min-h-[100vh]',
+          'supports-[min-height:100svh]:min-h-[100svh]',
+          'supports-[min-height:100dvh]:min-h-[100dvh]',
+        ].join(' ')}
+        aria-label="Game"
+      >
+        {/* Background */}
+        <div aria-hidden className="absolute inset-0 -z-10">
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,#0b0b10_0%,#0f172a_40%,#0b0b10_100%)]" />
+          <div className="absolute inset-0 opacity-[0.06] [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.35)_1px,transparent_1.2px)] [background-size:24px_24px]" />
+        </div>
 
-  {/* Texto/ayuda debajo, centrado y con padding normal */}
-  <div className="mx-auto max-w-4xl px-4 mt-8 text-white/90">
-    <h2 className="text-2xl sm:text-3xl font-semibold text-center">Play “Memory Walk”</h2>
-    <p className="mt-3 text-sm sm:text-base leading-relaxed text-white/80 text-center">
-      Haga Click en el area del juego para activar los controles. Presione "salir" para liberar el mouse.
-      Solo debe usar las flechas para jugar
-    </p>
-  </div>
+        <div className="mx-auto max-w-4xl px-4 mt-8 text-white/90">
+          <h2 className="text-2xl sm:text-3xl font-semibold text-center">Play “Memory Walk”</h2>
+          <p className="mt-3 text-sm sm:text-base leading-relaxed text-white/80 text-center">
+            Toca el área del juego para activar los controles. Presiona “Exit” para liberar el puntero.
+            Usa solo las flechas para jugar.
+          </p>
+        </div>
 
-  {/* FULL-BLEED WRAPPER: hace que el iframe use 100vw sin scroll horizontal */}
-  <div className="relative left-1/2 right-1/2 -mx-[50vw] w-screen max-w-none">
-    <div className="w-screen h-[min(80svh,85vh)] sm:h-[min(85svh,88vh)]">
-      <ScrollableIframe src="/game/index.html" title="Memory Walk" />
-    </div>
-  </div>
+        {/* Full-bleed wrapper to keep exact 100vw without side scroll */}
+        <div className="relative left-1/2 -translate-x-1/2 w-[100vw]">
+          <div
+            className={[
+              'w-[100vw]',
+              // Height clamp with fallbacks
+              'h-[min(80vh,85vh)]',
+              'supports-[height:85svh]:h-[min(80vh,85svh)]',
+              'supports-[height:88dvh]:h-[min(80vh,88dvh)]',
+              'sm:h-[min(85vh,88vh)]',
+              'sm:supports-[height:88svh]:h-[min(85svh,88svh)]',
+              'sm:supports-[height:90dvh]:h-[min(85vh,90dvh)]',
+            ].join(' ')}
+          >
+            <ScrollableIframe src="/game/index.html" title="Memory Walk" />
+          </div>
+        </div>
+      </section>
 
-</section>
-
+      {/* GALLERY */}
       <section className="relative w-full px-4 py-12 sm:py-16">
-      
         <Gallery />
       </section>
     </main>
-  )
+  );
 }

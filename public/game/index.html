@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Memory Walk (Game)</title>
+  <title>S&J</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <style>
     :root {
@@ -2025,8 +2025,8 @@ bubble._follow = scene.time.addEvent({
     constructor(){ super('StartMenu'); }
     create(){
       const { width, height } = this.scale;
-      this.add.text(width/2, height*0.3, 'MEMORY WALK', { fontFamily:'monospace', fontSize:32, color:'#ffffff' }).setOrigin(0.5);
-      const btn = this.add.text(width/2, height*0.55, '[ START ]', { fontFamily:'monospace', fontSize:24, color:'#00ffff', backgroundColor:'#111' }).setOrigin(0.5).setInteractive({ useHandCursor:true });
+      this.add.text(width/2, height*0.3, 'NUESTRAS MEMORIAS', { fontFamily:'monospace', fontSize:32, color:'#ffffff' }).setOrigin(0.5);
+      const btn = this.add.text(width/2, height*0.55, '[ INCIAR ]', { fontFamily:'monospace', fontSize:24, color:'#00ffff', backgroundColor:'#111' }).setOrigin(0.5).setInteractive({ useHandCursor:true });
       btn.on('pointerup', ()=> this.scene.start('SoundSelect'));
     }
   }
@@ -2036,9 +2036,9 @@ bubble._follow = scene.time.addEvent({
     preload(){ this.load.audio('bgm', ['/assets/audio/bgm.mp3']); }
     create(){
       const { width, height } = this.scale;
-      this.add.text(width/2, height*0.3, 'SOUND?', { fontFamily:'monospace', fontSize:28, color:'#ffffff' }).setOrigin(0.5);
-      this._btn(width/2 - 80, height*0.55, '[ ON ]',  ()=> this._choose(true));
-      this._btn(width/2 + 80, height*0.55, '[ OFF ]', ()=> this._choose(false));
+      this.add.text(width/2, height*0.3, 'SONIDO?', { fontFamily:'monospace', fontSize:28, color:'#ffffff' }).setOrigin(0.5);
+      this._btn(width/2 - 80, height*0.55, '[ SI ]',  ()=> this._choose(true));
+      this._btn(width/2 + 80, height*0.55, '[ NO ]', ()=> this._choose(false));
     }
     _btn(x,y,label,onClick){
       const t = this.add.text(x,y,label,{ fontFamily:'monospace', fontSize:22, color:'#00ffff', backgroundColor:'#111' }).setOrigin(0.5).setInteractive({ useHandCursor:true });
@@ -2064,171 +2064,221 @@ bubble._follow = scene.time.addEvent({
     }
   }
 
-  class FinalPhotoStrip extends Phaser.Scene {
-    constructor(){ super('FinalPhotoStrip'); }
-    preload(){
-      for (let i=1;i<=9;i++){
-        const key = `scene${i}`;
-        if (!this.textures.exists(key)) {
-          this.load.image(key, `/assets/scenes/scene${i}/scene${i}.png`);
-        }
+class FinalPhotoStrip extends Phaser.Scene {
+  constructor(){ super('FinalPhotoStrip'); }
+
+  preload(){
+    // Carga 6 fotos reales: /public/assets/real/foto_real1.jpg ... foto_real6.jpg
+    for (let i=1; i<=6; i++){
+      const key = `real${i}`;
+      if (!this.textures.exists(key)) {
+        this.load.image(key, `/assets/real/foto_real${i}.jpg`);
       }
-    }
-    create(){
-      const { width:W, height:H } = this.scale;
-      try {
-        this.sound.stopAll();
-        if (window.GameState?.bgm) { try { GameState.bgm.stop(); } catch(_) {} GameState.bgm = null; }
-        if (this.sound.context && this.sound.context.state !== 'suspended') {
-          this.sound.context.suspend().catch(()=>{});
-        }
-      } catch(_) {}
-
-      const dim = this.add.rectangle(W/2, H/2, W, H, 0x000000, 0.0).setDepth(20000).setScrollFactor(0);
-      this.tweens.add({ targets: dim, alpha: 0.65, duration: 500, ease: 'Sine.easeOut' });
-
-      const mkPolaroid = (texKey, caption='')=>{
-        const pw = Math.min(280, W*0.30), ph = Math.round(pw*1.25);
-        const frame = this.add.rectangle(0,0,pw,ph,0xffffff,1)
-          .setStrokeStyle(3, 0xeeeeee, 1).setOrigin(0.5,0.5);
-        const innerW = pw - 22, innerH = ph - 64;
-
-        const img = this.add.image(0, -6, texKey).setOrigin(0.5,0.5);
-        const src = this.textures.get(texKey)?.getSourceImage();
-        if (src) img.setScale(Math.min(innerW/src.width, innerH/src.height));
-
-        const cap = this.add.text(0, ph/2 - 28, caption, {
-          fontFamily:'monospace', fontSize: 14, color:'#333333', align:'center', wordWrap:{ width: pw-20 }
-        }).setOrigin(0.5,0.5);
-
-        const c = this.add.container(W/2, -ph, [frame, img, cap]).setDepth(20001);
-        c._pw = pw; c._ph = ph;
-        c._shadow = this.add.rectangle(W/2+6, -ph+8, pw, ph, 0x000000, 0.25)
-          .setDepth(20000).setOrigin(0.5,0.5);
-        return c;
-      };
-
-      const picks = [];
-      for (let i=1;i<=9;i++){
-        const k = `scene${i}`;
-        if (this.textures.exists(k)) picks.push([k, `Escena ${i}`]);
-      }
-      while (picks.length < 9 && picks.length > 0) {
-        picks.push(picks[picks.length % Math.max(1,picks.length)]);
-      }
-      const photos = picks.slice(0,9).map(([k,cap])=> mkPolaroid(k, cap));
-
-      const cols=3, rows=3;
-      const marginX = Math.min(80, W*0.06);
-      const marginY = Math.min(70, H*0.06);
-      const gridW = W - marginX*2, gridH = H - marginY*2;
-      const cellW = gridW/cols, cellH = gridH/rows;
-      const jitter = v => (Math.random()*v*2 - v);
-
-      const targets = [];
-      for (let r=0;r<rows;r++){
-        for (let c=0;c<cols;c++){
-          const x = marginX + cellW*(c+0.5);
-          const y = marginY + cellH*(r+0.5);
-          const baseR = ((r+c)%2===0) ? -0.06 : 0.08;
-          targets.push({ x, y, rot: baseR + jitter(0.03) });
-        }
-      }
-
-      photos.forEach((p, i)=>{
-        const L = targets[i % targets.length];
-        const delay = 240 + i*220;
-        p.setRotation((L.rot>0?L.rot-0.3:L.rot+0.3));
-        this.tweens.add({ targets: p._shadow, delay, duration: 650, ease: 'Back.Out', x: L.x+6 + jitter(4), y: L.y+8 + jitter(4) });
-        this.tweens.add({ targets: p,         delay, duration: 650, ease: 'Back.Out', x: L.x + jitter(6),  y: L.y + jitter(6),  rotation: L.rot });
-      });
-
-      const STAMP_TEXT = 'Felices por siempre';
-      const stampDepth = 30002;
-      const stampY     = H * 0.12;
-      const fontSize   = Math.min(58, W*0.075);
-
-      const stamp = this.add.text(W/2, stampY, STAMP_TEXT, {
-        fontFamily: 'monospace',
-        fontSize: fontSize,
-        color: '#ffffff',
-        align: 'center',
-        letterSpacing: 1
-      })
-      .setOrigin(0.5)
-      .setDepth(stampDepth)
-      .setAlpha(0)
-      .setScale(1.35)
-      .setRotation(-0.06)
-      .setStroke('#000000', Math.max(4, Math.round(fontSize * 0.12)))
-      .setShadow(0, Math.max(2, Math.round(fontSize * 0.05)), '#000000', Math.max(6, Math.round(fontSize * 0.1)), true, true);
-
-      const stampDrop = this.add.text(W/2 + 3, stampY + 3, STAMP_TEXT, {
-        fontFamily: 'monospace',
-        fontSize: fontSize,
-        color: '#000000',
-        align: 'center',
-        letterSpacing: 1
-      })
-      .setOrigin(0.5)
-      .setDepth(stampDepth - 1)
-      .setAlpha(0)
-      .setScale(1.35)
-      .setRotation(-0.06);
-
-      const sub = this.add.text(W/2, stampY + Math.min(64, H*0.065), '¡Que vivan los novios!', {
-        fontFamily:'monospace',
-        fontSize: Math.min(22, W*0.03),
-        color:'#ffffff'
-      })
-      .setOrigin(0.5)
-      .setDepth(stampDepth)
-      .setAlpha(0)
-      .setStroke('#000000', 3)
-      .setShadow(0, 2, '#000000', 6, true, true);
-
-      const afterDrop = 240 + photos.length*220 + 260;
-
-      this.time.delayedCall(afterDrop, ()=>{
-        stamp.setAlpha(1);
-        stampDrop.setAlpha(0.45);
-        this.tweens.add({ targets: [stamp, stampDrop], duration: 280, ease: 'Back.Out', scale: 1.0, rotation: -0.02 });
-      });
-
-      this.tweens.add({ targets: sub, delay: afterDrop + 320, duration: 620, alpha: 1, ease: 'Sine.easeOut' });
-
-      const vignette = this.add.graphics().setDepth(20003);
-      this.tweens.add({
-        targets: vignette, delay: 300, duration: 1000,
-        onUpdate: (_, t)=>{
-          vignette.clear();
-          vignette.fillStyle(0x000000, 0.20*Math.min(1,t));
-          vignette.fillRect(0,0,W,H);
-        }
-      });
-      this.cameras.main.setZoom(1);
-      this.tweens.add({ targets: this.cameras.main, zoom: 1.04, duration: 1600, delay: afterDrop, ease: 'Sine.easeInOut' });
-
-      const total = afterDrop + 2200;
-      this.time.delayedCall(total, ()=>{
-        this.cameras.main.fadeOut(900, 0,0,0);
-        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, ()=>{
-          const play = this.scene.get('Play');
-          if (play) { play.scene.stop(); }
-          this.scene.stop();
-          this.scene.start('StartMenu');
-        });
-      });
-
-      this.scale.on('resize', (size)=>{
-        dim.setSize(size.width, size.height).setPosition(size.width/2, size.height/2);
-        const ny = size.height * 0.12;
-        stamp.setPosition(size.width/2, ny);
-        stampDrop.setPosition(size.width/2 + 3, ny + 3);
-        sub.setPosition(size.width/2, ny + Math.min(64, size.height*0.065));
-      });
     }
   }
+
+  create(){
+    const { width:W, height:H } = this.scale;
+
+    // Apaga música/sonido de la escena anterior
+    try {
+      this.sound.stopAll();
+      if (window.GameState?.bgm) { try { GameState.bgm.stop(); } catch(_) {} GameState.bgm = null; }
+      if (this.sound.context && this.sound.context.state !== 'suspended') {
+        this.sound.context.suspend().catch(()=>{});
+      }
+    } catch(_) {}
+
+    // Dim de fondo
+    const dim = this.add.rectangle(W/2, H/2, W, H, 0x000000, 0.0).setDepth(20000).setScrollFactor(0);
+    this.tweens.add({ targets: dim, alpha: 0.65, duration: 500, ease: 'Sine.easeOut' });
+
+    /* =================== TUNABLES RÁPIDOS =================== */
+    const PHOTO_WIDTH_FRACTION = 0.28;   // tamaño base de “polaroid” ~28% del ancho
+    const OVERLAP_TIGHTNESS    = 0.75;   // 1 = sin solape; <1 = más solape (0.75 recomendado)
+    const ROT_EXTRA            = 0.02;   // leve aleatoriedad de rotación
+    const DROP_STAGGER         = 180;    // retardo entre caídas de cada foto
+    /* ======================================================== */
+
+    // Crea un “marco” tipo polaroid: borde blanco + imagen + (sin caption)
+    const mkPolaroid = (texKey)=>{
+      const pw = Math.min(320, W * PHOTO_WIDTH_FRACTION);
+      const ph = Math.round(pw * 1.25);
+      const border = 12;    // borde blanco total
+      const bottomPad = 36; // “mentón” inferior del marco
+
+      const frame = this.add.rectangle(0,0,pw,ph,0xffffff,1)
+        .setStrokeStyle(3, 0xeeeeee, 1).setOrigin(0.5,0.5);
+
+      const innerW = pw - border*2;
+      const innerH = ph - border - bottomPad;
+
+      const img = this.add.image(0, -((bottomPad - border)/2), texKey).setOrigin(0.5,0.5);
+      const src = this.textures.get(texKey)?.getSourceImage();
+      if (src) {
+        img.setScale(Math.min(innerW/src.width, innerH/src.height));
+      }
+
+      const c = this.add.container(W/2, -ph, [frame, img]).setDepth(20001);
+      c._pw = pw; c._ph = ph;
+      c._shadow = this.add.rectangle(W/2+6, -ph+8, pw, ph, 0x000000, 0.22)
+        .setDepth(20000).setOrigin(0.5,0.5);
+
+      return c;
+    };
+
+    // Reúne las 6 fotos reales (si alguna no cargó, la omite)
+    const keys = [];
+    for (let i=1; i<=6; i++){
+      const k = `real${i}`;
+      if (this.textures.exists(k)) keys.push(k);
+    }
+
+    // Crea polaroids para cada foto
+    const photos = keys.map(k => mkPolaroid(k));
+
+    // Disposición tipo collage con solape (todas visibles)
+    // Centro visual
+    const cx = W * 0.5;
+    const cy = H * 0.55;
+
+    // Separación base entre centros (se reduce con OVERLAP_TIGHTNESS)
+    const pw = photos[0]? photos[0]._pw : Math.min(320, W*PHOTO_WIDTH_FRACTION);
+    const ph = photos[0]? photos[0]._ph : Math.round(pw*1.25);
+    const dx = pw * 0.85 * OVERLAP_TIGHTNESS;
+    const dy = ph * 0.55 * OVERLAP_TIGHTNESS;
+
+    // Targets manuales con leve variación. Ajusta posiciones si deseas
+    const targets = [
+      { x: cx - dx*1.2, y: cy - dy*0.9, rot: -0.10 },
+      { x: cx - dx*0.2, y: cy - dy*1.1, rot:  0.06 },
+      { x: cx + dx*0.9, y: cy - dy*0.8, rot: -0.03 },
+      { x: cx - dx*0.9, y: cy + dy*0.2, rot:  0.03 },
+      { x: cx + dx*0.2, y: cy + dy*0.5, rot: -0.07 },
+      { x: cx + dx*1.2, y: cy + dy*0.1, rot:  0.09 },
+    ].slice(0, photos.length);
+
+    // Anima cada foto con caída “Back.Out” y solapamiento suave
+    photos.forEach((p, i)=>{
+      const t = targets[i];
+      const delay = 240 + i*DROP_STAGGER;
+      const baseRot = t.rot + ((Math.random()*2-1)*ROT_EXTRA);
+
+      p.setRotation((baseRot>0?baseRot-0.30:baseRot+0.30));
+
+      // sombra
+      this.tweens.add({
+        targets: p._shadow,
+        delay, duration: 650, ease: 'Back.Out',
+        x: t.x + 6, y: t.y + 8
+      });
+
+      // polaroid
+      this.tweens.add({
+        targets: p,
+        delay, duration: 650, ease: 'Back.Out',
+        x: t.x, y: t.y, rotation: baseRot
+      });
+
+      // orden de profundidad para que queden “encima” de forma agradable
+      p.setDepth(20001 + i);
+      p._shadow.setDepth(20000 + i);
+    });
+
+    // Sello de texto
+    const STAMP_TEXT = 'Felices por siempre';
+    const stampDepth = 30002;
+    const stampY     = H * 0.12;
+    const fontSize   = Math.min(58, W*0.075);
+
+    const stamp = this.add.text(W/2, stampY, STAMP_TEXT, {
+      fontFamily: 'monospace',
+      fontSize: fontSize,
+      color: '#ffffff',
+      align: 'center',
+      letterSpacing: 1
+    })
+    .setOrigin(0.5)
+    .setDepth(stampDepth)
+    .setAlpha(0)
+    .setScale(1.35)
+    .setRotation(-0.06)
+    .setStroke('#000000', Math.max(4, Math.round(fontSize * 0.12)))
+    .setShadow(0, Math.max(2, Math.round(fontSize * 0.05)), '#000000', Math.max(6, Math.round(fontSize * 0.1)), true, true);
+
+    const stampDrop = this.add.text(W/2 + 3, stampY + 3, STAMP_TEXT, {
+      fontFamily: 'monospace',
+      fontSize: fontSize,
+      color: '#000000',
+      align: 'center',
+      letterSpacing: 1
+    })
+    .setOrigin(0.5)
+    .setDepth(stampDepth - 1)
+    .setAlpha(0)
+    .setScale(1.35)
+    .setRotation(-0.06);
+
+    const sub = this.add.text(W/2, stampY + Math.min(64, H*0.065), '¡Que vivan los novios!', {
+      fontFamily:'monospace',
+      fontSize: Math.min(22, W*0.03),
+      color:'#ffffff'
+    })
+    .setOrigin(0.5)
+    .setDepth(stampDepth)
+    .setAlpha(0)
+    .setStroke('#000000', 3)
+    .setShadow(0, 2, '#000000', 6, true, true);
+
+    const afterDrop = 240 + photos.length*DROP_STAGGER + 260;
+
+    this.time.delayedCall(afterDrop, ()=>{
+      stamp.setAlpha(1);
+      stampDrop.setAlpha(0.45);
+      this.tweens.add({ targets: [stamp, stampDrop], duration: 280, ease: 'Back.Out', scale: 1.0, rotation: -0.02 });
+    });
+
+    this.tweens.add({ targets: sub, delay: afterDrop + 320, duration: 620, alpha: 1, ease: 'Sine.easeOut' });
+
+    // Vignette suave
+    const vignette = this.add.graphics().setDepth(20003);
+    this.tweens.add({
+      targets: vignette, delay: 300, duration: 1000,
+      onUpdate: (_, t)=>{
+        vignette.clear();
+        vignette.fillStyle(0x000000, 0.20*Math.min(1,t));
+        vignette.fillRect(0,0,W,H);
+      }
+    });
+
+    // Zoom sutil final
+    this.cameras.main.setZoom(1);
+    this.tweens.add({ targets: this.cameras.main, zoom: 1.04, duration: 1600, delay: afterDrop, ease: 'Sine.easeInOut' });
+
+    // Salida a StartMenu
+    const total = afterDrop + 2200;
+    this.time.delayedCall(total, ()=>{
+      this.cameras.main.fadeOut(900, 0,0,0);
+      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, ()=>{
+        const play = this.scene.get('Play');
+        if (play) { play.scene.stop(); }
+        this.scene.stop();
+        this.scene.start('StartMenu');
+      });
+    });
+
+    // Responsivo: recoloca sello y subtítulo
+    this.scale.on('resize', (size)=>{
+      dim.setSize(size.width, size.height).setPosition(size.width/2, size.height/2);
+      const ny = size.height * 0.12;
+      stamp.setPosition(size.width/2, ny);
+      stampDrop.setPosition(size.width/2 + 3, ny + 3);
+      sub.setPosition(size.width/2, ny + Math.min(64, size.height*0.065));
+    });
+
+    
+  }
+}
 
   class CharacterSelect extends Phaser.Scene {
     constructor(){ super('CharacterSelect'); }
@@ -2240,7 +2290,7 @@ bubble._follow = scene.time.addEvent({
     }
     create(){
       const { width, height } = this.scale;
-      this.add.text(width/2, height*0.2, 'CHOOSE YOUR CHARACTER', { fontFamily:'monospace', fontSize:24, color:'#ffffff' }).setOrigin(0.5);
+      this.add.text(width/2, height*0.2, 'ESCOGE UN NOVIO', { fontFamily:'monospace', fontSize:24, color:'#ffffff' }).setOrigin(0.5);
 
       const joaquin = this.add.image(width/2 - 120, height*0.70, 'joaquin_idle')
         .setOrigin(0.5,1).setScale(0.6).setInteractive({ useHandCursor:true });
@@ -2382,7 +2432,7 @@ bubble._follow = scene.time.addEvent({
       this._ensureNeighbors(1);
 
      // BELOW the feet, just past the rail/ground line
-const helpText = (this.scale.width < 900 ? 'Presiones  ◀ ▶ para caminar' : 'Use \u2190 / \u2192 para caminar');
+const helpText = (this.scale.width < 900 ? 'Use  ◀ ▶ para caminar' : 'Use \u2190 / \u2192 para caminar');
 this.help = this.add.text(
   this.player.x,
   this.railY + 8,                  // <— under the ground line

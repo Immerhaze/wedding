@@ -1,6 +1,97 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+
+// --- EXIF ORIENTATION (JPEG) ---
+async function getJpegOrientation(file) {
+  // Solo JPEG; otras extensiones no traen este flag útil
+  if (!/jpe?g$/i.test(file.name || '')) return 1;
+  const buf = await file.slice(0, 128 * 1024).arrayBuffer();
+  const view = new DataView(buf);
+
+  // SOI 0xFFD8
+  if (view.getUint16(0, false) !== 0xFFD8) return 1;
+
+  let offset = 2;
+  const len = view.byteLength;
+  while (offset + 4 <= len) {
+    const marker = view.getUint16(offset, false); offset += 2;
+    const size = view.getUint16(offset, false);   offset += 2;
+    if (marker === 0xFFE1) { // APP1 -> EXIF
+      // "Exif\0\0"
+      if (view.getUint32(offset, false) !== 0x45786966) return 1;
+      const tiffOff = offset + 6;
+      const little = view.getUint16(tiffOff, false) === 0x4949;
+      const getU16 = (p) => view.getUint16(p, little);
+      const getU32 = (p) => view.getUint32(p, little);
+
+      const firstIFD = tiffOff + getU32(tiffOff + 4);
+      const entries = getU16(firstIFD);
+      for (let i = 0; i < entries; i++) {
+        const p = firstIFD + 2 + i * 12;
+        const tag = getU16(p);
+        if (tag === 0x0112) { // Orientation
+          const val = getU16(p + 8);
+          return val || 1;
+        }
+      }
+      return 1;
+    } else if ((marker & 0xFFF0) !== 0xFFE0) {
+      // Llegamos a otro segmento (no APPn)
+      break;
+    } else {
+      offset += size - 2;
+    }
+  }
+  return 1;
+}
+
+function drawOriented(ctx, img, w, h, orientation) {
+  // Ajusta canvas + transform según EXIF
+  // Orientaciones comunes: 1 (normal), 6 (90° CW), 8 (270°), 3 (180°)
+  switch (orientation) {
+    case 6: // 90 cw
+      ctx.canvas.width = h;
+      ctx.canvas.height = w;
+      ctx.translate(h, 0);
+      ctx.rotate(Math.PI / 2);
+      ctx.drawImage(img, 0, 0, w, h);
+      break;
+    case 8: // 270 cw
+      ctx.canvas.width = h;
+      ctx.canvas.height = w;
+      ctx.translate(0, w);
+      ctx.rotate(-Math.PI / 2);
+      ctx.drawImage(img, 0, 0, w, h);
+      break;
+    case 3: // 180
+      ctx.canvas.width = w;
+      ctx.canvas.height = h;
+      ctx.translate(w, h);
+      ctx.rotate(Math.PI);
+      ctx.drawImage(img, 0, 0, w, h);
+      break;
+    default: // 1
+      ctx.canvas.width = w;
+      ctx.canvas.height = h;
+      ctx.drawImage(img, 0, 0, w, h);
+  }
+}
+
+// toBlob fallback para Safari viejito
+function canvasToBlob(canvas, type = 'image/jpeg', quality = 0.82) {
+  return new Promise((resolve) => {
+    if (canvas.toBlob) {
+      canvas.toBlob((b) => resolve(b), type, quality);
+    } else {
+      const dataURL = canvas.toDataURL(type, quality);
+      const bin = atob(dataURL.split(',')[1]);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      resolve(new Blob([arr], { type }));
+    }
+  });
+}
 
 export default function Gallery({
   initialPhotos = [],
@@ -14,28 +105,43 @@ export default function Gallery({
 
   const openPicker = () => inputRef.current?.click();
 
-  // ===== util: compresión local antes de subir =====
+  // ===== compresión + corrección de orientación (iPhone) =====
   async function compressImage(file, maxSide = 2000, quality = 0.82) {
+    // Orientación EXIF
+    const orientation = await getJpegOrientation(file);
+
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.src = url;
-    await img.decode();
-    const { width, height } = img;
+
+    // Safari-safe decode
+    await new Promise((resolve, reject) => {
+      if (img.decode) {
+        img.decode().then(resolve).catch(() => {
+          img.onload = () => resolve();
+          img.onerror = (e) => reject(e);
+        });
+      } else {
+        img.onload = () => resolve();
+        img.onerror = (e) => reject(e);
+      }
+    });
+
+    const width = img.naturalWidth || img.width;
+    const height = img.naturalHeight || img.height;
     const scale = Math.min(1, maxSide / Math.max(width, height));
     const cw = Math.round(width * scale);
     const ch = Math.round(height * scale);
 
     const canvas = document.createElement('canvas');
-    canvas.width = cw;
-    canvas.height = ch;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(img, 0, 0, cw, ch);
+
+    drawOriented(ctx, img, cw, ch, orientation);
     URL.revokeObjectURL(url);
 
-    return new Promise((resolve) =>
-      canvas.toBlob((b) => resolve(b), 'image/jpeg', quality)
-    );
+    const blob = await canvasToBlob(canvas, 'image/jpeg', quality);
+    return blob;
   }
 
   // ===== API helper por defecto (si no pasas onUpload) =====
@@ -66,7 +172,7 @@ export default function Gallery({
 
   const doUpload = onUpload || defaultUpload;
 
-  // ===== Carga inicial (si no vienen initialPhotos) =====
+  // ===== Carga inicial =====
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -91,7 +197,7 @@ export default function Gallery({
     return () => { cancelled = true; };
   }, [initialPhotos.length]);
 
-  // ===== Auto-refresh de URLs firmadas (evita expiración mientras navegan) =====
+  // ===== Auto-refresh de URLs firmadas =====
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
@@ -115,25 +221,26 @@ export default function Gallery({
     e.currentTarget.value = '';
     if (!f) return;
 
+    let localURL;
     try {
       setBusy(true);
       const blob = await compressImage(f);
       const compressed = new File([blob], `guest_${Date.now()}.jpg`, { type: 'image/jpeg' });
 
       // pinta un “temp” local mientras sube
-      const localURL = URL.createObjectURL(compressed);
+      localURL = URL.createObjectURL(compressed);
       const temp = { id: `temp_${Date.now()}`, src: localURL };
       setPhotos((p) => [temp, ...p]);
 
       const saved = await doUpload(compressed); // {id, src}
       setPhotos((p) => [saved, ...p.filter((x) => x.id !== temp.id)]);
-      URL.revokeObjectURL(localURL);
     } catch (err) {
       console.error(err);
       alert('No se pudo procesar la foto. Inténtalo otra vez.');
       // limpia el temp si quedó
       setPhotos((p) => p.filter((x) => !x.id.startsWith('temp_')));
     } finally {
+      if (localURL) URL.revokeObjectURL(localURL);
       setBusy(false);
     }
   }
@@ -186,7 +293,11 @@ export default function Gallery({
                 <figure
                   key={ph.id}
                   className="mb-0 break-inside-avoid relative overflow-hidden group"
-                  style={{ fontSize: '' }}
+                  style={{
+                    fontSize: '',
+                    breakInside: 'avoid',
+                    WebkitColumnBreakInside: 'avoid', // <- iOS Safari masonry estable
+                  }}
                 >
                   <img
                     src={ph.src}
@@ -195,7 +306,6 @@ export default function Gallery({
                     className="block w-full h-auto object-cover select-none grayscale-[10%] hover:grayscale-0 transition duration-300 will-change-transform"
                     style={{ contentVisibility: 'auto' }}
                     onError={async () => {
-                      // Si una firmada caducó individualmente, intentamos refrescar solo esta.
                       try {
                         const res = await fetch('/api/guest-photos', { cache: 'no-store' });
                         const { photos: list } = await res.json();
