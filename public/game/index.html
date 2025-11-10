@@ -67,16 +67,6 @@
       backdrop-filter: blur(6px);
       -webkit-backdrop-filter: blur(6px);
     }
-    
-/* Prevent text selection / long-press menus inside mobile buttons */
-.mc-btn, .mc-btn * {
-  user-select: none;
-  -webkit-user-select: none;    /* iOS Safari */
-  -ms-user-select: none;
-  -moz-user-select: none;
-  -webkit-touch-callout: none;  /* no copy/share popup on long-press */
-  caret-color: transparent;     /* no caret flash */
-}
     .mc-btn:active,
     .mc-btn.mc-pressed {
       background: rgba(0, 255, 255, 0.22);
@@ -100,9 +90,6 @@
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
 
   <script>
-
-
-
   /* ================================================
      Global state & helpers
   ================================================= */
@@ -1509,8 +1496,8 @@ bubble._follow = scene.time.addEvent({
       JOAQUIN_REL_W: 0.065,   // standing Joaquin width
       KNEE_REL_W:    0.032,   // ↓ smaller kneel sprite (was 0.06)
       RING_REL_W:    0.040,   // ring size
-      STOP_GAP:      17,
-      TRIGGER_RADIUS:80,
+      STOP_GAP:      22,
+      TRIGGER_RADIUS:100,
       STEP_MS:       1500,
       TRANS_MS:      140,     // crossfade standing <-> kneel
       SETTLE_MS:     160      // small pause to ensure idle pose
