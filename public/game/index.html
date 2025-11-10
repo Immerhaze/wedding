@@ -67,6 +67,16 @@
       backdrop-filter: blur(6px);
       -webkit-backdrop-filter: blur(6px);
     }
+    
+/* Prevent text selection / long-press menus inside mobile buttons */
+.mc-btn, .mc-btn * {
+  user-select: none;
+  -webkit-user-select: none;    /* iOS Safari */
+  -ms-user-select: none;
+  -moz-user-select: none;
+  -webkit-touch-callout: none;  /* no copy/share popup on long-press */
+  caret-color: transparent;     /* no caret flash */
+}
     .mc-btn:active,
     .mc-btn.mc-pressed {
       background: rgba(0, 255, 255, 0.22);
@@ -91,14 +101,7 @@
 
   <script>
 
-  // Block selection and context menu within the on-screen controls
-  (function(){
-    const mc = document.getElementById('mobileControls');
-    if (!mc) return;
-    ['selectstart','selectionchange','contextmenu'].forEach(ev=>{
-      mc.addEventListener(ev, (e)=> e.preventDefault(), { passive:false });
-    });
-  })();
+
 
   /* ================================================
      Global state & helpers

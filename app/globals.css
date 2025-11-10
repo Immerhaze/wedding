@@ -26,12 +26,3 @@ body {
 }
 
 
-/* Prevent text selection / long-press menus inside mobile buttons */
-.mc-btn, .mc-btn * {
-  user-select: none;
-  -webkit-user-select: none;    /* iOS Safari */
-  -ms-user-select: none;
-  -moz-user-select: none;
-  -webkit-touch-callout: none;  /* no copy/share popup on long-press */
-  caret-color: transparent;     /* no caret flash */
-}
