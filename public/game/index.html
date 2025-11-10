@@ -90,6 +90,16 @@
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
 
   <script>
+
+  // Block selection and context menu within the on-screen controls
+  (function(){
+    const mc = document.getElementById('mobileControls');
+    if (!mc) return;
+    ['selectstart','selectionchange','contextmenu'].forEach(ev=>{
+      mc.addEventListener(ev, (e)=> e.preventDefault(), { passive:false });
+    });
+  })();
+
   /* ================================================
      Global state & helpers
   ================================================= */
@@ -1496,8 +1506,8 @@ bubble._follow = scene.time.addEvent({
       JOAQUIN_REL_W: 0.065,   // standing Joaquin width
       KNEE_REL_W:    0.032,   // ↓ smaller kneel sprite (was 0.06)
       RING_REL_W:    0.040,   // ring size
-      STOP_GAP:      22,
-      TRIGGER_RADIUS:100,
+      STOP_GAP:      17,
+      TRIGGER_RADIUS:80,
       STEP_MS:       1500,
       TRANS_MS:      140,     // crossfade standing <-> kneel
       SETTLE_MS:     160      // small pause to ensure idle pose
