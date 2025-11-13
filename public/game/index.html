@@ -40,6 +40,8 @@
       image-rendering: pixelated;
     }
 
+    
+
     /* --- Mobile on-screen controls --- */
     .mobile-controls {
       position: fixed;
@@ -76,6 +78,15 @@
     @media (min-width: 900px) {
       .mobile-controls { display: none; }
     }
+
+    #mobileControls button,
+#mobileControls button * {
+  user-select: none;
+  -webkit-user-select: none;  /* iOS Safari */
+  -ms-user-select: none;
+  -webkit-touch-callout: none; /* disable long-press menu on iOS */
+}
+
   </style>
 </head>
 <body>
@@ -1497,7 +1508,7 @@ bubble._follow = scene.time.addEvent({
       KNEE_REL_W:    0.032,   // ↓ smaller kneel sprite (was 0.06)
       RING_REL_W:    0.040,   // ring size
       STOP_GAP:      22,
-      TRIGGER_RADIUS:100,
+      TRIGGER_RADIUS:60,
       STEP_MS:       1500,
       TRANS_MS:      140,     // crossfade standing <-> kneel
       SETTLE_MS:     160      // small pause to ensure idle pose
@@ -1751,7 +1762,7 @@ bubble._follow = scene.time.addEvent({
       npcKey: null,        // 's9_sofia_wedd' or 's9_joaquin_wedd'
 
       // Proximity/locks
-      triggerRadius: 120,
+      triggerRadius: 60,
       stopGap: 18,
       locking: false,
       doneOnce: false,
@@ -2031,38 +2042,87 @@ bubble._follow = scene.time.addEvent({
     }
   }
 
-  class SoundSelect extends Phaser.Scene {
-    constructor(){ super('SoundSelect'); }
-    preload(){ this.load.audio('bgm', ['/assets/audio/bgm.mp3']); }
-    create(){
-      const { width, height } = this.scale;
-      this.add.text(width/2, height*0.3, 'SONIDO?', { fontFamily:'monospace', fontSize:28, color:'#ffffff' }).setOrigin(0.5);
-      this._btn(width/2 - 80, height*0.55, '[ SI ]',  ()=> this._choose(true));
-      this._btn(width/2 + 80, height*0.55, '[ NO ]', ()=> this._choose(false));
-    }
-    _btn(x,y,label,onClick){
-      const t = this.add.text(x,y,label,{ fontFamily:'monospace', fontSize:22, color:'#00ffff', backgroundColor:'#111' }).setOrigin(0.5).setInteractive({ useHandCursor:true });
-      t.on('pointerup', onClick);
-      return t;
-    }
-    _choose(on){
-      GameState.sound = on;
+ class SoundSelect extends Phaser.Scene {
+  constructor(){ super('SoundSelect'); }
 
-      if (!GameState.bgm) {
-        GameState.bgm = this.sound.add('bgm', { loop:true, volume:0.12 });
-      } else {
-        this.sound.removeByKey('bgm');
-        GameState.bgm = this.sound.add('bgm', { loop:true, volume:0.12 });
-      }
-      if (on) {
-        if (!GameState.bgm.isPlaying) GameState.bgm.play();
-      } else {
-        if (GameState.bgm.isPlaying) GameState.bgm.pause();
-      }
-
-      this.scene.start('CharacterSelect');
+  preload(){
+    // Carga la BGM (usa solo MP3 para iOS)
+    if (!this.cache.audio.exists('bgm')) {
+      this.load.audio('bgm', ['/assets/audio/bgm.mp3']);
     }
   }
+
+  create(){
+    const { width, height } = this.scale;
+
+    this.add.text(width/2, height*0.3, 'SONIDO?', {
+      fontFamily:'monospace', fontSize:28, color:'#ffffff'
+    }).setOrigin(0.5);
+
+    this._btn(width/2 - 80, height*0.55, '[ SI ]',  () => this._choose(true));
+    this._btn(width/2 + 80, height*0.55, '[ NO ]',  () => this._choose(false));
+
+    // También permite Enter = Sí, Esc = No (opcional)
+    this.input.keyboard.on('keydown-ENTER', () => this._choose(true));
+    this.input.keyboard.on('keydown-ESC',   () => this._choose(false));
+  }
+
+  _btn(x, y, label, onClick){
+    const t = this.add.text(x, y, label, {
+      fontFamily:'monospace', fontSize:22, color:'#00ffff', backgroundColor:'#111'
+    }).setOrigin(0.5).setInteractive({ useHandCursor:true });
+
+    t.on('pointerup', async (ev) => {
+      ev?.preventDefault?.();
+      await this._ensureAudioUnlocked(); // 🔓 asegúrate de desbloquear antes de cualquier play()
+      onClick();
+    });
+
+    return t;
+  }
+
+  async _choose(turnOn){
+    GameState.sound = turnOn;
+
+    // (Re)crea el objeto BGM limpio (evita referencias viejas)
+    if (GameState.bgm) {
+      try { GameState.bgm.stop(); } catch(_) {}
+      try { this.sound.remove(GameState.bgm); } catch(_) {}
+      GameState.bgm = null;
+    }
+    GameState.bgm = this.sound.add('bgm', { loop:true, volume:0.12 });
+
+    if (turnOn) {
+      // Si por algo Phaser reporta locked, espera el evento UNLOCKED
+      if (this.sound.locked) {
+        this.sound.once(Phaser.Sound.Events.UNLOCKED, () => {
+          try { if (!GameState.bgm.isPlaying) GameState.bgm.play(); } catch(_) {}
+        });
+      } else {
+        try { if (!GameState.bgm.isPlaying) GameState.bgm.play(); } catch(_) {}
+      }
+    } else {
+      try { if (GameState.bgm.isPlaying) GameState.bgm.pause(); } catch(_) {}
+    }
+
+    this.scene.start('CharacterSelect');
+  }
+
+  // ——— Utilidad segura para iOS/Android: desbloquea WebAudio en un gesto ———
+  async _ensureAudioUnlocked(){
+    try {
+      if (this.sound.locked) this.sound.unlock();
+      const ctx = this.sound.context;
+      if (ctx && ctx.state === 'suspended') {
+        // iOS requiere un "resume()" dentro del handler del gesto del usuario
+        await ctx.resume();
+      }
+    } catch(_) {
+      // Ignora errores de plataforma
+    }
+  }
+}
+
 
 class FinalPhotoStrip extends Phaser.Scene {
   constructor(){ super('FinalPhotoStrip'); }
@@ -2256,16 +2316,27 @@ class FinalPhotoStrip extends Phaser.Scene {
     this.tweens.add({ targets: this.cameras.main, zoom: 1.04, duration: 1600, delay: afterDrop, ease: 'Sine.easeInOut' });
 
     // Salida a StartMenu
-    const total = afterDrop + 2200;
-    this.time.delayedCall(total, ()=>{
-      this.cameras.main.fadeOut(900, 0,0,0);
-      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, ()=>{
-        const play = this.scene.get('Play');
-        if (play) { play.scene.stop(); }
-        this.scene.stop();
-        this.scene.start('StartMenu');
-      });
-    });
+// Cuando termina la escena final → fade → recargar página
+const total = afterDrop + 2200;
+
+this.time.delayedCall(total, () => {
+  this.cameras.main.fadeOut(900, 0, 0, 0);
+
+  this.cameras.main.once(
+    Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+    () => {
+      try { this.sound.stopAll(); } catch (_) {}
+
+      // 🔄 Reinicia por completo el juego y el overlay del iframe
+      if (window && window.location) {
+        window.parent.postMessage("GAME_FINISHED", "*");
+        window.location.reload();
+
+      }
+    }
+  );
+});
+
 
     // Responsivo: recoloca sello y subtítulo
     this.scale.on('resize', (size)=>{
@@ -2794,7 +2865,11 @@ this.help.setPosition(
     scene: [StartMenu, SoundSelect, CharacterSelect, Play, FinalPhotoStrip],
     scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
     render: { pixelArt:true, antialias:false, roundPixels:true },
-    resolution: DPR
+    resolution: DPR,
+    audio: {
+    noAudio: false,
+    disableWebAudio: false
+  }
   });
 
   </script>
