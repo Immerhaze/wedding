@@ -2042,7 +2042,7 @@ bubble._follow = scene.time.addEvent({
     }
   }
 
- class SoundSelect extends Phaser.Scene {
+class SoundSelect extends Phaser.Scene {
   constructor(){ super('SoundSelect'); }
 
   preload(){
@@ -2052,75 +2052,116 @@ bubble._follow = scene.time.addEvent({
     }
   }
 
-  create(){
-    const { width, height } = this.scale;
+create() {
+  const { width: W, height: H } = this.scale;
 
-    this.add.text(width/2, height*0.3, 'SONIDO?', {
-      fontFamily:'monospace', fontSize:28, color:'#ffffff'
-    }).setOrigin(0.5);
+  // 🔓 1) Desbloquear audio con el PRIMER toque en la pantalla
+  this.input.once('pointerdown', () => {
+    if (this.sound.locked) {
+      console.log('[iOS] Intentando desbloquear audio…');
+      this.sound.unlock();
+    }
+    // En algunos iOS viejos ayuda forzar el resume:
+    if (this.sound.context && this.sound.context.state === 'suspended') {
+      this.sound.context.resume().then(() => {
+        console.log('[iOS] Audio context resumido');
+      }).catch(e => console.log('Error al resumir contexto', e));
+    }
+  });
 
-    this._btn(width/2 - 80, height*0.55, '[ SI ]',  () => this._choose(true));
-    this._btn(width/2 + 80, height*0.55, '[ NO ]',  () => this._choose(false));
+  // 🔽 el resto de tu create() va después de esto
+  this.add.text(W/2, H*0.3, '¿Quieres sonido?', {
+    fontFamily: 'monospace',
+    fontSize: 26,
+    color: '#ffffff'
+  }).setOrigin(0.5);
 
-    // También permite Enter = Sí, Esc = No (opcional)
-    this.input.keyboard.on('keydown-ENTER', () => this._choose(true));
-    this.input.keyboard.on('keydown-ESC',   () => this._choose(false));
-  }
+  this._btn(W/2 - 80, H*0.6, '[  SI  ]', true);
+  this._btn(W/2 + 80, H*0.6, '[  NO  ]', false);
+}
 
-  _btn(x, y, label, onClick){
-    const t = this.add.text(x, y, label, {
-      fontFamily:'monospace', fontSize:22, color:'#00ffff', backgroundColor:'#111'
-    }).setOrigin(0.5).setInteractive({ useHandCursor:true });
 
-    t.on('pointerup', async (ev) => {
-      ev?.preventDefault?.();
-      await this._ensureAudioUnlocked(); // 🔓 asegúrate de desbloquear antes de cualquier play()
-      onClick();
-    });
+_btn(x, y, label, turnOn){
+  const t = this.add.text(x, y, label, {
+    fontFamily:'monospace',
+    fontSize:22,
+    color:'#00ffff',
+    backgroundColor:'#111'
+  }).setOrigin(0.5).setInteractive({ useHandCursor:true });
 
-    return t;
-  }
+  t.on('pointerdown', () => {
+    console.log('click:', label, 'locked=', this.sound.locked);
 
-  async _choose(turnOn){
     GameState.sound = turnOn;
 
-    // (Re)crea el objeto BGM limpio (evita referencias viejas)
+    // Detener BGM anterior si existe
     if (GameState.bgm) {
       try { GameState.bgm.stop(); } catch(_) {}
       try { this.sound.remove(GameState.bgm); } catch(_) {}
       GameState.bgm = null;
     }
-    GameState.bgm = this.sound.add('bgm', { loop:true, volume:0.12 });
 
     if (turnOn) {
-      // Si por algo Phaser reporta locked, espera el evento UNLOCKED
-      if (this.sound.locked) {
-        this.sound.once(Phaser.Sound.Events.UNLOCKED, () => {
-          try { if (!GameState.bgm.isPlaying) GameState.bgm.play(); } catch(_) {}
-        });
-      } else {
-        try { if (!GameState.bgm.isPlaying) GameState.bgm.play(); } catch(_) {}
+      // ✅ Crear y reproducir BGM DENTRO del mismo gesto pointerdown
+      GameState.bgm = this.sound.add('bgm', { loop:true, volume:0.12 });
+      try {
+        GameState.bgm.play();
+        console.log('BGM play() llamado');
+      } catch (e) {
+        console.log('Error play BGM', e);
       }
-    } else {
-      try { if (GameState.bgm.isPlaying) GameState.bgm.pause(); } catch(_) {}
     }
 
     this.scene.start('CharacterSelect');
+  });
+
+  return t;
+}
+
+
+ async _choose(turnOn){
+  GameState.sound = turnOn;
+
+  if (GameState.bgm) {
+    try { GameState.bgm.stop(); } catch(_) {}
+    try { this.sound.remove(GameState.bgm); } catch(_) {}
+    GameState.bgm = null;
+  }
+  GameState.bgm = this.sound.add('bgm', { loop:true, volume:0.12 });
+
+  if (turnOn) {
+    if (this.sound.locked) {
+      this.sound.once(Phaser.Sound.Events.UNLOCKED, () => {
+        try { if (!GameState.bgm.isPlaying) GameState.bgm.play(); } catch(_) {}
+      });
+    } else {
+      try { if (!GameState.bgm.isPlaying) GameState.bgm.play(); } catch(_) {}
+    }
+  } else {
+    try { if (GameState.bgm.isPlaying) GameState.bgm.pause(); } catch(_) {}
   }
 
-  // ——— Utilidad segura para iOS/Android: desbloquea WebAudio en un gesto ———
-  async _ensureAudioUnlocked(){
-    try {
-      if (this.sound.locked) this.sound.unlock();
-      const ctx = this.sound.context;
-      if (ctx && ctx.state === 'suspended') {
-        // iOS requiere un "resume()" dentro del handler del gesto del usuario
-        await ctx.resume();
-      }
-    } catch(_) {
-      // Ignora errores de plataforma
+  this.scene.start('CharacterSelect');
+}
+
+  // ——— Desbloqueo simple para iOS, SIN async/await ———
+_ensureAudioUnlocked(){
+  try {
+    // Si Phaser cree que el audio está bloqueado, lo desbloqueamos
+    if (this.sound.locked) {
+      this.sound.unlock();
     }
+
+    const ctx = this.sound.context;
+    if (ctx && ctx.state === 'suspended') {
+      // NO usamos await aquí: solo llamamos resume() dentro del gesto
+      ctx.resume();
+    }
+  } catch(_) {
+    // iOS / Safari pueden lanzar cosas raras, las ignoramos
   }
+}
+
 }
 
 
@@ -2856,21 +2897,22 @@ this.help.setPosition(
     }
   }
 
-  const game = new Phaser.Game({
-    type: Phaser.AUTO,
-    parent: document.getElementById('game-root'),
-    width: window.innerWidth,
-    height: window.innerHeight,
-    backgroundColor:'#000',
-    scene: [StartMenu, SoundSelect, CharacterSelect, Play, FinalPhotoStrip],
-    scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
-    render: { pixelArt:true, antialias:false, roundPixels:true },
-    resolution: DPR,
+const game = new Phaser.Game({
+  type: Phaser.AUTO,
+  parent: document.getElementById('game-root'),
+  width: window.innerWidth,
+  height: window.innerHeight,
+  backgroundColor:'#000',
+  scene: [StartMenu, SoundSelect, CharacterSelect, Play, FinalPhotoStrip],
+  scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+  render: { pixelArt:true, antialias:false, roundPixels:true },
+  resolution: DPR,
     audio: {
-    noAudio: false,
-    disableWebAudio: false
+    disableWebAudio: true,
+    noAudio: false
   }
-  });
+});
+
 
   </script>
 </body>

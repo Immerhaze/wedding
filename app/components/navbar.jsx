@@ -23,15 +23,17 @@ export default function NavBar() {
   }, [])
 
   return (
-    <header
-      className="sticky top-0 z-50 w-full border-b border-white/10 "
-      style={{
-        paddingTop: 'max(env(safe-area-inset-top), 0px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        backdropFilter: 'blur(8px)',
-      }}
-      role="banner"
-    >
+   <header
+  className="sticky top-0 z-50 w-full border-b border-white/10 bg-black/90"
+  style={{
+    paddingTop: 'max(env(safe-area-inset-top), 0px)',
+    WebkitBackdropFilter: 'blur(8px)',
+    backdropFilter: 'blur(8px)',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)', // refuerzo por si falla Tailwind
+  }}
+  role="banner"
+>
+
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <nav className="h-14 sm:h-16 flex items-center justify-between">
           

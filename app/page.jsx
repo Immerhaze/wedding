@@ -163,8 +163,15 @@ useEffect(() => {
   }, []);
 
   return (
-    
-    <main className="w-screen max-w-screen overflow-x-hidden">
+    <main
+      className="
+        w-screen max-w-screen overflow-x-hidden
+        min-h-screen        /* ⭐ que cubra todo el alto */
+        bg-black            /* ⭐ fondo negro uniforme */
+        text-white
+      "
+    >
+
       {/* LOADING SCREEN */}
 {/* FULLSCREEN LOADING SCREEN */}
 {loading && (
@@ -345,9 +352,10 @@ useEffect(() => {
       </section>
 
       {/* GALLERY */}
-      <section className="relative w-full px-4 py-12 sm:py-16">
-        <Gallery />
-      </section>
+      {/* GALLERY */}
+<section className="relative w-full px-4 py-12 sm:py-16 bg-black">
+  <Gallery />
+</section>
     </main>
   );
 }
