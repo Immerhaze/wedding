@@ -104,7 +104,8 @@
   /* ================================================
      Global state & helpers
   ================================================= */
-  const GameState = { sound: true, character: null, bgm: null };
+  const GameState = { sound: true, character: null, bgm: null, scene4Song: null };
+
 
   // Titles per zone (1..9)
   const ZONE_TITLES = {
@@ -287,18 +288,19 @@ bubble._follow = scene.time.addEvent({
     }).setOrigin(0.5);
     ui.add(playBg); ui.add(playTx);
 
-    [card, album, title, playBg, playTx].forEach(el=>{
-      el.setInteractive({ useHandCursor:true });
-      el.on('pointerdown', async ()=>{
-        try{
-          if (scene.sound.locked) scene.sound.unlock();
-          if (scene.sound.context && scene.sound.context.state === 'suspended'){
-            await scene.sound.context.resume();
-          }
-        }catch(e){}
-        if (onPlay) onPlay();
-      });
-    });
+ [card, album, title, playBg, playTx].forEach(el=>{
+  el.setInteractive({ useHandCursor:true });
+  el.on('pointerdown', ()=>{              // ← remove async
+    try{
+      if (scene.sound.locked) scene.sound.unlock();
+      if (scene.sound.context && scene.sound.context.state === 'suspended'){
+        // IMPORTANT: no await here, just fire-and-forget
+        scene.sound.context.resume();
+      }
+    }catch(e){}
+    if (onPlay) onPlay();                 // ← _s4StartSong is now in the real gesture chain
+  });
+});
 
     s4.uiFollow = scene.time.addEvent({
       delay:16, loop:true, callback:()=>{
@@ -312,41 +314,64 @@ bubble._follow = scene.time.addEvent({
     });
   }
 
-  function _s4StartSong(scene){
-    const s4 = scene._s4;
-    if (!s4) return;
+function _s4StartSong(scene){
+  const s4 = scene._s4;
+  if (!s4) return;
 
-    if (GameState.bgm && GameState.bgm.isPlaying) GameState.bgm.stop();
-    if (scene.ambBirds && scene.ambBirds.isPlaying) scene.ambBirds.stop();
-    if (scene.ambAtmo  && scene.ambAtmo.isPlaying)  scene.ambAtmo.stop();
+  if (GameState.bgm && GameState.bgm.isPlaying) GameState.bgm.stop();
+  if (scene.ambBirds && scene.ambBirds.isPlaying) scene.ambBirds.stop();
+  if (scene.ambAtmo  && scene.ambAtmo.isPlaying)  scene.ambAtmo.stop();
 
-    if (!scene.cache.audio.exists('scene4_song')) {
-      console.warn('[Scene4] Missing audio key "scene4_song" (/assets/audio/greenday.mp3)');
-      return;
-    }
-    if (!s4.song) {
-      s4.song = scene.sound.add('scene4_song', { volume:0.20, loop:true });
-    }
-
-    if (s4.ui) { s4.ui.destroy(true); s4.ui=null; }
-    if (s4.uiFollow) { s4.uiFollow.remove(false); s4.uiFollow = null; }
-    if (s4.bubble) { if (s4.bubble._follow) s4.bubble._follow.remove(false); s4.bubble.destroy(true); s4.bubble=null; }
-
-    s4.song.play({ seek: 0 });
-    s4.songPlaying = true;
-    GameState.bgm = s4.song;
-
-    // Lock until dialog finishes
-    scene._controlsLocked = true;
-    s4.dialogTimers ||= [];
-
-    const t1 = scene.time.delayedCall(4000, () => { _s4ShowNpcBubble(scene, "¡Me encanta! ❤️"); });
-    const t2 = scene.time.delayedCall(5200, () => { _s4ShowBubble(scene, "Te amo"); });
-    const t3 = scene.time.delayedCall(7200, () => { _s4ShowNpcBubble(scene, "Yo también te amo"); });
-    const t4 = scene.time.delayedCall(9000, () => { scene._controlsLocked = false; });
-
-    s4.dialogTimers.push(t1, t2, t3, t4);
+  if (!scene.cache.audio.exists('scene4_song')) {
+    console.warn('[Scene4] Missing audio key "scene4_song" (/assets/audio/greenday.mp3)');
+    return;
   }
+
+ if (!s4.song) {
+  if (GameState.scene4Song) {
+    // Reusar el sonido global creado en SoundSelect
+    s4.song = GameState.scene4Song;
+    s4.song.setLoop(true);
+    s4.song.setVolume(0.20);
+  } else {
+    // Fallback por si algo falla y no existe (desktop u otros navegadores)
+    s4.song = scene.sound.add('scene4_song', { volume: 0.20, loop: true });
+  }
+}
+
+
+  // Limpia UI/burbujas
+  if (s4.ui) { s4.ui.destroy(true); s4.ui=null; }
+  if (s4.uiFollow) { s4.uiFollow.remove(false); s4.uiFollow=null; }
+  if (s4.bubble) {
+    if (s4.bubble._follow) s4.bubble._follow.remove(false);
+    s4.bubble.destroy(true);
+    s4.bubble=null;
+  }
+
+  // ▶ Aquí empieza la magia (dentro de un gesto real)
+  try {
+    s4.song.play();
+  } catch (e) {
+    console.warn('[Scene4] Could not play scene4_song:', e);
+    return;
+  }
+
+  s4.songPlaying = true;
+  GameState.bgm = s4.song;
+
+  // diálogos...
+  scene._controlsLocked = true;
+  s4.dialogTimers ||= [];
+
+  const t1 = scene.time.delayedCall(4000, () => { _s4ShowNpcBubble(scene, "¡Me encanta! ❤️"); });
+  const t2 = scene.time.delayedCall(5200, () => { _s4ShowBubble(scene, "Te amo"); });
+  const t3 = scene.time.delayedCall(7200, () => { _s4ShowNpcBubble(scene, "Yo también te amo"); });
+  const t4 = scene.time.delayedCall(9000, () => { scene._controlsLocked = false; });
+
+  s4.dialogTimers.push(t1, t2, t3, t4);
+}
+
 
   /* ===================== ZONES (mini-scenes) ===================== */
   const ZONE_DEFS = {
@@ -585,99 +610,170 @@ bubble._follow = scene.time.addEvent({
 
     /* ------------ Scene 3 (follower NPC inside bounds) ------------ */
     3: {
-      manifest: { images:[ { key:'scene2', path:'/assets/scenes/scene2/scene2.png' } ] },
-      build(scene, container){
-        const baseImg = container.list.find(o => o.texture?.key?.startsWith('scene'));
-        if (!baseImg) return;
-        const pad = 12;
-        const b = baseImg.getBounds();
-        const left  = b.left  + pad;
-        const right = b.right - pad;
+  manifest: {
+    images: [
+      { key: 'scene2', path: '/assets/scenes/scene2/scene2.png' },
+      // 🚗 auto: 3 frames para la animación
+      { key: 'scene2_auto1', path: '/assets/scenes/scene2/extra/auto.png' },
+      { key: 'scene2_auto2', path: '/assets/scenes/scene2/extra/auto2.png' },
+      { key: 'scene2_auto3', path: '/assets/scenes/scene2/extra/auto3.png' },
+    ]
+  },
 
-        scene._npc3_bounds     = { left, right };
-        scene._npc3_waitLeftX  = left;
-        scene._npc3_waitRightX = right;
-        scene._npc3_followGap  = 30;
-        scene._npc3_lerp       = 0.20;
+  build(scene, container){
+    const baseImg = container.list.find(o => o.texture?.key?.startsWith('scene'));
+    if (!baseImg) return;
+    const pad = 12;
+    const b = baseImg.getBounds();
+    const left  = b.left  + pad;
+    const right = b.right - pad;
 
-        const who   = GameState.character || 'joaquin';
-        const other = (who === 'sofia') ? 'joaquin' : 'sofia';
-        scene._npc3_other   = other;
-        scene._npc3_walkKey = `npc3_walk_${other}`;
+    // ================= NPC FOLLOWER =================
+    scene._npc3_bounds     = { left, right };
+    scene._npc3_waitLeftX  = left;
+    scene._npc3_waitRightX = right;
+    scene._npc3_followGap  = 30;
+    scene._npc3_lerp       = 0.20;
 
-        if (!scene.anims.exists(scene._npc3_walkKey)) {
-          scene.anims.create({
-            key: scene._npc3_walkKey,
-            frames: [1,2,3,4,5,6].map(i => ({ key: `${other}_walk${i}` })),
-            frameRate: 12,
-            repeat: -1
-          });
-        }
+    const who   = GameState.character || 'joaquin';
+    const other = (who === 'sofia') ? 'joaquin' : 'sofia';
+    scene._npc3_other   = other;
+    scene._npc3_walkKey = `npc3_walk_${other}`;
 
-        if (!scene._npc3) {
-          scene._npc3 = scene.add
-            .sprite(scene._npc3_waitLeftX, scene.railY, `${other}_idle`)
-            .setOrigin(0.5, 1)
-            .setScale(0.2)
-            .setDepth(999)
-            .setFlipX(false);
-          scene._npc3_mode = 'left_wait';
-        } else {
-          scene._npc3.setDepth(999).setScale(0.2);
-          scene._npc3.x = Phaser.Math.Clamp(scene._npc3.x, left, right);
-        }
-      },
+    if (!scene.anims.exists(scene._npc3_walkKey)) {
+      scene.anims.create({
+        key: scene._npc3_walkKey,
+        frames: [1,2,3,4,5,6].map(i => ({ key: `${other}_walk${i}` })),
+        frameRate: 12,
+        repeat: -1
+      });
+    }
 
-      enter(scene){
-        const npc = scene._npc3, lim = scene._npc3_bounds;
-        if (!npc || !lim) return;
-        const px = scene.player.x;
+    if (!scene._npc3) {
+      scene._npc3 = scene.add
+        .sprite(scene._npc3_waitLeftX, scene.railY, `${other}_idle`)
+        .setOrigin(0.5, 1)
+        .setScale(0.2)
+        .setDepth(999)
+        .setFlipX(false);
+      scene._npc3_mode = 'left_wait';
+    } else {
+      scene._npc3.setDepth(999).setScale(0.2);
+      scene._npc3.x = Phaser.Math.Clamp(scene._npc3.x, left, right);
+    }
 
-        if (px >= lim.left && px <= lim.right) {
-          const gap = scene.player.flipX ? -scene._npc3_followGap : scene._npc3_followGap;
-          npc.x = Phaser.Math.Clamp(px + gap, lim.left, lim.right);
-          npc.setFlipX(scene.player.flipX);
-          scene._npc3_mode = 'follow';
-          scene.isMoving ? npc.play(scene._npc3_walkKey, true)
-                         : npc.setTexture(`${scene._npc3_other}_idle`);
-        } else {
-          if (px <  lim.left) { npc.x = scene._npc3_waitLeftX;  npc.setFlipX(false);  scene._npc3_mode = 'left_wait'; }
-          if (px >  lim.right){ npc.x = scene._npc3_waitRightX; npc.setFlipX(true);   scene._npc3_mode = 'right_wait'; }
-          npc.stop().setTexture(`${scene._npc3_other}_idle`);
-        }
-      },
+    // ================= AUTO =================
+    // animación del auto
+// ================= AUTO =================
+scene._carAnimKey = 'scene2_auto_anim';
+if (!scene.anims.exists(scene._carAnimKey)) {
+  scene.anims.create({
+    key: scene._carAnimKey,
+    frames: [
+      { key: 'scene2_auto1' },
+      { key: 'scene2_auto2' },
+      { key: 'scene2_auto3' },
+    ],
+    frameRate: 10,
+    repeat: -1
+  });
+}
 
-      leave(scene){
-        const npc = scene._npc3, lim = scene._npc3_bounds;
-        if (npc && lim){
-          const px = scene.player.x;
-          if (px <= lim.left)  { npc.x = scene._npc3_waitLeftX;  npc.setFlipX(false);  scene._npc3_mode = 'left_wait'; }
-          if (px >= lim.right) { npc.x = scene._npc3_waitRightX; npc.setFlipX(true);   scene._npc3_mode = 'right_wait'; }
-          npc.stop().setTexture(`${scene._npc3_other}_idle`);
-        }
-      },
+// límites para el movimiento del auto (un poco fuera del fondo)
+scene._carStartX = b.right + 80;
+scene._carEndX   = b.left  - 80;
+scene._carSpeed  = 80;      // puedes ajustar esto si quieres
 
-      update(scene){
-        const npc = scene._npc3, lim = scene._npc3_bounds;
-        if (!npc || !lim) return;
+// cooldown entre autos (en segundos)
+scene._carCooldown = 5;
+scene._carActive   = true;   // si está en movimiento o no
 
-        const px = scene.player.x;
+if (!scene._car) {
+  // 🔹 Súbelo un poco: más arriba que el rail
+  const carY = scene.railY - 50;
 
-        if (px < lim.left) {
-          scene._npc3_mode = 'left_wait';
-          npc.x = scene._npc3_waitLeftX;
-          npc.setFlipX(false);
-          npc.stop().setTexture(`${scene._npc3_other}_idle`);
-          return;
-        }
-        if (px > lim.right) {
-          scene._npc3_mode = 'right_wait';
-          npc.x = scene._npc3_waitRightX;
-          npc.setFlipX(true);
-          npc.stop().setTexture(`${scene._npc3_other}_idle`);
-          return;
-        }
+  scene._car = scene.add
+    .sprite(scene._carStartX, carY, 'scene2_auto1')
+    .setOrigin(0.5, 1)
+    .setDepth(998)
+    .setScale(0.32)   // 🔹 más grande
+    .setFlipX(true);  // 🔹 mirando hacia la IZQUIERDA
 
+  scene._car.play(scene._carAnimKey, true);
+
+  // Máscara tipo "overflow: hidden" del tamaño del fondo
+  const g = scene.add.graphics();
+  g.fillStyle(0xffffff, 1);
+  g.fillRect(b.left, b.top, b.width, b.height);
+  scene._carMaskGraphics = g;
+  scene._carMask = g.createGeometryMask();
+
+  scene._car.setMask(scene._carMask);
+} else {
+  scene._car.setDepth(998);
+}
+
+  },
+
+  enter(scene){
+    const npc = scene._npc3, lim = scene._npc3_bounds;
+    if (!npc || !lim) return;
+    const px = scene.player.x;
+
+    if (px >= lim.left && px <= lim.right) {
+      const gap = scene.player.flipX ? -scene._npc3_followGap : scene._npc3_followGap;
+      npc.x = Phaser.Math.Clamp(px + gap, lim.left, lim.right);
+      npc.setFlipX(scene.player.flipX);
+      scene._npc3_mode = 'follow';
+      scene.isMoving ? npc.play(scene._npc3_walkKey, true)
+                     : npc.setTexture(`${scene._npc3_other}_idle`);
+    } else {
+      if (px <  lim.left) { npc.x = scene._npc3_waitLeftX;  npc.setFlipX(false);  scene._npc3_mode = 'left_wait'; }
+      if (px >  lim.right){ npc.x = scene._npc3_waitRightX; npc.setFlipX(true);   scene._npc3_mode = 'right_wait'; }
+      npc.stop().setTexture(`${scene._npc3_other}_idle`);
+    }
+
+    // reactivar anim del auto al entrar a la zona
+    // reactivar anim del auto al entrar a la zona
+if (scene._car && scene._carAnimKey) {
+  scene._car.setVisible(true);
+  scene._car.play(scene._carAnimKey, true);
+  scene._carActive = true;
+}
+
+  },
+
+  leave(scene){
+    const npc = scene._npc3, lim = scene._npc3_bounds;
+    if (npc && lim){
+      const px = scene.player.x;
+      if (px <= lim.left)  { npc.x = scene._npc3_waitLeftX;  npc.setFlipX(false);  scene._npc3_mode = 'left_wait'; }
+      if (px >= lim.right) { npc.x = scene._npc3_waitRightX; npc.setFlipX(true);   scene._npc3_mode = 'right_wait'; }
+      npc.stop().setTexture(`${scene._npc3_other}_idle`);
+    }
+
+    // parar auto al salir de la zona (opcional)
+    if (scene._car) {
+      scene._car.stop();
+    }
+  },
+
+  update(scene){
+    const npc = scene._npc3, lim = scene._npc3_bounds;
+    if (npc && lim){
+      const px = scene.player.x;
+
+      if (px < lim.left) {
+        scene._npc3_mode = 'left_wait';
+        npc.x = scene._npc3_waitLeftX;
+        npc.setFlipX(false);
+        npc.stop().setTexture(`${scene._npc3_other}_idle`);
+      } else if (px > lim.right) {
+        scene._npc3_mode = 'right_wait';
+        npc.x = scene._npc3_waitRightX;
+        npc.setFlipX(true);
+        npc.stop().setTexture(`${scene._npc3_other}_idle`);
+      } else {
         scene._npc3_mode = 'follow';
         const gap     = scene.player.flipX ? -scene._npc3_followGap : scene._npc3_followGap;
         const targetX = Phaser.Math.Clamp(px + gap, lim.left, lim.right);
@@ -690,12 +786,41 @@ bubble._follow = scene.time.addEvent({
             npc.play(scene._npc3_walkKey, true);
           }
           const pf = scene.player.anims.currentFrame, na = npc.anims.currentAnim;
-          if (pf && na && na.frames && na.frames[pf.index]) npc.anims.setCurrentFrame(na.frames[pf.index]);
+          if (pf && na && na.frames && na.frames[pf.index]) {
+            npc.anims.setCurrentFrame(na.frames[pf.index]);
+          }
         } else {
           npc.stop().setTexture(`${scene._npc3_other}_idle`);
         }
-      },
-    },
+      }
+    }
+
+    // ================= UPDATE AUTO =================
+// ================= UPDATE AUTO =================
+if (scene._car && typeof scene._carStartX === 'number' && typeof scene._carEndX === 'number') {
+  if (scene._carActive) {
+    const dt = scene.game.loop.delta / 1000; // segundos
+    scene._car.x -= scene._carSpeed * dt;
+
+    // cuando sale por la izquierda, lo escondemos y esperamos 5s
+    if (scene._car.x <= scene._carEndX) {
+      scene._carActive = false;
+      scene._car.setVisible(false);
+
+      scene.time.delayedCall(scene._carCooldown * 1000, () => {
+        if (!scene._car) return;
+        scene._car.x = scene._carStartX;
+        scene._car.setVisible(true);
+        scene._carActive = true;
+        scene._car.play(scene._carAnimKey, true);
+      }, null, scene);
+    }
+  }
+}
+
+  },
+},
+
 
     /* ------------ Scene 4 (bench + song) ------------ */
     4: {
@@ -726,7 +851,7 @@ bubble._follow = scene.time.addEvent({
         const other = (who === 'sofia') ? 'joaquin' : 'sofia';
         const npcKey = (other === 'sofia') ? 's4_npc_sofia' : 's4_npc_joaquin';
 
-        const NPC_REL_WIDTH = 0.080;
+        const NPC_REL_WIDTH = 0.100;
         const npcTexW  = scene.textures.get(npcKey).getSourceImage().width;
         const npc = scene.add.sprite(0, 0, npcKey)
           .setOrigin(0.1, 1)
@@ -849,7 +974,7 @@ bubble._follow = scene.time.addEvent({
         const baseImg = scene.textures.get('scene5').getSourceImage();
         const baseW   = baseImg.width;
 
-        const NPC_REL_W        = 0.085;
+        const NPC_REL_W        = 0.1;
         const LOKY_REL_W       = 0.045;
         const FOLLOW_GAP       = 28;
         const LERP_FOLLOW      = 0.20;
@@ -1261,7 +1386,7 @@ bubble._follow = scene.time.addEvent({
         const baseImg = scene.textures.get('scene7').getSourceImage();
         const baseW   = baseImg.width;
 
-        const NPC_REL_W        = 0.085;
+        const NPC_REL_W        = 0.1;
         const NPC_IDLE_BOB_PX  = 3;
         const LOKY_REL_W       = 0.035;
         const LOKY_OFFSET_X    = 70;
@@ -1503,7 +1628,7 @@ bubble._follow = scene.time.addEvent({
   build(scene, container){
     /* ===== CONFIGURABLE ===== */
     const SCALE = {
-      SOFIA_REL_W:   0.065,   // standing Sofia width (vs bg width)
+      SOFIA_REL_W:   0.090,   // standing Sofia width (vs bg width)
       JOAQUIN_REL_W: 0.065,   // standing Joaquin width
       KNEE_REL_W:    0.032,   // ↓ smaller kneel sprite (was 0.06)
       RING_REL_W:    0.040,   // ring size
@@ -1708,7 +1833,7 @@ bubble._follow = scene.time.addEvent({
     /* ------------ Scene 9 (final strip / countdown) ------------ */
 9: {
   // Flip to false if you want the countdown mode
-  S9_FORCE_DONE: true,
+  S9_FORCE_DONE: false,
 
   manifest: {
     images: [
@@ -1733,7 +1858,7 @@ bubble._follow = scene.time.addEvent({
 
     // Wedding sprite scales (relative to bg width)
     const SCALE_NPC = {
-      sofia:   0.105,
+      sofia:   0.170,
       joaquin: 0.105
     };
 
@@ -2043,125 +2168,115 @@ bubble._follow = scene.time.addEvent({
   }
 
 class SoundSelect extends Phaser.Scene {
-  constructor(){ super('SoundSelect'); }
-
-  preload(){
-    // Carga la BGM (usa solo MP3 para iOS)
-    if (!this.cache.audio.exists('bgm')) {
-      this.load.audio('bgm', ['/assets/audio/bgm.mp3']);
-    }
+  constructor() {
+    super('SoundSelect');
   }
 
-create() {
-  const { width: W, height: H } = this.scale;
+ preload() {
+  // Cargamos solo MP3 para iOS (nada de OGG)
+  if (!this.cache.audio.exists('bgm')) {
+    this.load.audio('bgm', ['/assets/audio/bgm.mp3']);
+  }
 
-  // 🔓 1) Desbloquear audio con el PRIMER toque en la pantalla
-  this.input.once('pointerdown', () => {
-    if (this.sound.locked) {
-      console.log('[iOS] Intentando desbloquear audio…');
-      this.sound.unlock();
-    }
-    // En algunos iOS viejos ayuda forzar el resume:
-    if (this.sound.context && this.sound.context.state === 'suspended') {
-      this.sound.context.resume().then(() => {
-        console.log('[iOS] Audio context resumido');
-      }).catch(e => console.log('Error al resumir contexto', e));
-    }
-  });
-
-  // 🔽 el resto de tu create() va después de esto
-  this.add.text(W/2, H*0.3, '¿Quieres sonido?', {
-    fontFamily: 'monospace',
-    fontSize: 26,
-    color: '#ffffff'
-  }).setOrigin(0.5);
-
-  this._btn(W/2 - 80, H*0.6, '[  SI  ]', true);
-  this._btn(W/2 + 80, H*0.6, '[  NO  ]', false);
+  if (!this.cache.audio.exists('scene4_song')) {
+    this.load.audio('scene4_song', ['/assets/audio/greenday.mp3']);
+  }
 }
 
 
-_btn(x, y, label, turnOn){
-  const t = this.add.text(x, y, label, {
-    fontFamily:'monospace',
-    fontSize:22,
-    color:'#00ffff',
-    backgroundColor:'#111'
-  }).setOrigin(0.5).setInteractive({ useHandCursor:true });
+  create() {
+    const { width: W, height: H } = this.scale;
 
-  t.on('pointerdown', () => {
-    console.log('click:', label, 'locked=', this.sound.locked);
+    // Texto principal
+    this.add.text(W / 2, H * 0.30, '¿Quieres sonido?', {
+      fontFamily: 'monospace',
+      fontSize: 26,
+      color: '#ffffff'
+    }).setOrigin(0.5);
 
-    GameState.sound = turnOn;
+    // Botones
+    this._makeButton(W / 2 - 80, H * 0.60, '[  SI  ]', true);
+    this._makeButton(W / 2 + 80, H * 0.60, '[  NO  ]', false);
+  }
 
-    // Detener BGM anterior si existe
-    if (GameState.bgm) {
-      try { GameState.bgm.stop(); } catch(_) {}
-      try { this.sound.remove(GameState.bgm); } catch(_) {}
-      GameState.bgm = null;
-    }
+  _makeButton(x, y, label, turnOn) {
+    const txt = this.add.text(x, y, label, {
+      fontFamily: 'monospace',
+      fontSize: 22,
+      color: '#00ffff',
+      backgroundColor: '#111'
+    })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
 
-    if (turnOn) {
-      // ✅ Crear y reproducir BGM DENTRO del mismo gesto pointerdown
-      GameState.bgm = this.sound.add('bgm', { loop:true, volume:0.12 });
-      try {
-        GameState.bgm.play();
-        console.log('BGM play() llamado');
-      } catch (e) {
-        console.log('Error play BGM', e);
-      }
-    }
+    // USAMOS pointerdown (no pointerup) para que CUENTE como gesto en iOS
+ txt.on('pointerdown', (ev) => {
+  ev?.preventDefault?.();
 
-    this.scene.start('CharacterSelect');
-  });
+  // 1) Desbloquear audio de iOS dentro del mismo gesto
+  this._unlockAudio();
 
-  return t;
-}
-
-
- async _choose(turnOn){
+  // 2) Guardar elección global
   GameState.sound = turnOn;
 
+  // 3) Limpiar cualquier BGM anterior
   if (GameState.bgm) {
-    try { GameState.bgm.stop(); } catch(_) {}
-    try { this.sound.remove(GameState.bgm); } catch(_) {}
+    try { GameState.bgm.stop(); } catch (_) {}
+    try { this.sound.remove(GameState.bgm); } catch (_) {}
     GameState.bgm = null;
   }
-  GameState.bgm = this.sound.add('bgm', { loop:true, volume:0.12 });
 
-  if (turnOn) {
-    if (this.sound.locked) {
-      this.sound.once(Phaser.Sound.Events.UNLOCKED, () => {
-        try { if (!GameState.bgm.isPlaying) GameState.bgm.play(); } catch(_) {}
+  // 4) Crear BGM nuevo
+  GameState.bgm = this.sound.add('bgm', { loop: true, volume: 0.12 });
+
+  // ✅ 4.5) Crear también la canción de la escena 4 dentro del mismo gesto
+  if (!GameState.scene4Song) {
+    try {
+      GameState.scene4Song = this.sound.add('scene4_song', {
+        loop: true,
+        volume: 0.20
       });
-    } else {
-      try { if (!GameState.bgm.isPlaying) GameState.bgm.play(); } catch(_) {}
+    } catch (e) {
+      console.warn('[SoundSelect] No se pudo crear scene4_song:', e);
+    }
+  }
+
+  // 5) Si eligió "SI", reproducir de inmediato dentro del mismo pointerdown
+  if (turnOn) {
+    try {
+      GameState.bgm.play();
+      console.log('[SoundSelect] BGM play() called');
+    } catch (e) {
+      console.warn('[SoundSelect] Error trying to play BGM:', e);
     }
   } else {
-    try { if (GameState.bgm.isPlaying) GameState.bgm.pause(); } catch(_) {}
+    console.log('[SoundSelect] Sound disabled by user');
   }
 
+  // 6) Pasar a la selección de personaje
   this.scene.start('CharacterSelect');
-}
+});
 
-  // ——— Desbloqueo simple para iOS, SIN async/await ———
-_ensureAudioUnlocked(){
-  try {
-    // Si Phaser cree que el audio está bloqueado, lo desbloqueamos
-    if (this.sound.locked) {
-      this.sound.unlock();
-    }
 
-    const ctx = this.sound.context;
-    if (ctx && ctx.state === 'suspended') {
-      // NO usamos await aquí: solo llamamos resume() dentro del gesto
-      ctx.resume();
-    }
-  } catch(_) {
-    // iOS / Safari pueden lanzar cosas raras, las ignoramos
+    return txt;
   }
-}
 
+  _unlockAudio() {
+    try {
+      // Si Phaser cree que el audio está bloqueado, lo desbloqueamos
+      if (this.sound.locked) {
+        this.sound.unlock();
+      }
+
+      const ctx = this.sound.context;
+      if (ctx && ctx.state === 'suspended') {
+        // NO usamos await, solo llamamos resume() dentro del gesto
+        ctx.resume();
+      }
+    } catch (e) {
+      console.warn('[SoundSelect] unlock audio error (ignorable):', e);
+    }
+  }
 }
 
 
@@ -2544,15 +2659,21 @@ this.time.delayedCall(total, () => {
       this._ensureNeighbors(1);
 
      // BELOW the feet, just past the rail/ground line
-const helpText = (this.scale.width < 900 ? 'Use  ◀ ▶ para caminar' : 'Use \u2190 / \u2192 para caminar');
+// BELOW the feet, just past the rail/ground line
+const helpText = (this.scale.width < 900
+  ? 'Use  ◀ ▶ para caminar'
+  : 'Use \u2190 / \u2192 para caminar'
+);
+
 this.help = this.add.text(
   this.player.x,
-  this.railY + 8,                  // <— under the ground line
+  this.railY + 8, // 👈 under the ground line
   helpText,
-  { fontFamily:'monospace', fontSize:14, color:'#ffffff' }
+  { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }
 )
-.setOrigin(0.5, 0)                 // <— anchor from TOP (grows downward)
-.setDepth(2000);
+  .setOrigin(0.5, 0)   // 👈 origin at TOP, so it grows downward
+  .setDepth(2000);
+
 
 
       this._outfitBoundaryX = this._zoneBounds(3).right;
@@ -2679,14 +2800,15 @@ this.help = this.add.text(
 
       this.thoughtBubble.setPosition(this.player.x, this.player.y - this.player.displayHeight - 40);
      // Keep help pinned under the player’s feet, but never off-screen
+// Keep help pinned under the player’s feet, but never off-screen
 const cam = this.cameras.main;
-const padBottom = 12;           // margin from bottom of the screen
-const desiredY  = this.railY + 8;
+const padBottom = 12;         // margin from bottom of the screen
+const desiredY  = this.railY + 8;   // same offset as in create()
 const maxY      = cam.worldView.bottom - padBottom;
 
 this.help.setPosition(
   this.player.x,
-  Math.min(desiredY, maxY)      // clamp so it doesn't get cut off
+  Math.min(desiredY, maxY)    // clamp so it doesn't get cut off
 );
 
 
@@ -2896,6 +3018,10 @@ this.help.setPosition(
       else this.player.stop().setTexture(this._idleKey);
     }
   }
+  // Detectar iPhone / iPad / iOS Safari (incluye iPadOS moderno)
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -2907,8 +3033,9 @@ const game = new Phaser.Game({
   scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
   render: { pixelArt:true, antialias:false, roundPixels:true },
   resolution: DPR,
-    audio: {
-    disableWebAudio: true,
+  audio: {
+    // 👇 HTML5 audio en iOS, WebAudio en todo lo demás
+    disableWebAudio: IS_IOS,
     noAudio: false
   }
 });
