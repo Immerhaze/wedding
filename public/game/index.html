@@ -2062,7 +2062,7 @@ function _s4StartSong(scene){
     create(){
       const { width, height } = this.scale;
       this.add.text(width/2, height*0.3, 'NUESTRAS MEMORIAS', { fontFamily:'monospace', fontSize:32, color:'#ffffff' }).setOrigin(0.5);
-      const btn = this.add.text(width/2, height*0.55, '[ INCIAR ]', { fontFamily:'monospace', fontSize:24, color:'#00ffff', backgroundColor:'#111' }).setOrigin(0.5).setInteractive({ useHandCursor:true });
+      const btn = this.add.text(width/2, height*0.55, '[ INICIAR ]', { fontFamily:'monospace', fontSize:24, color:'#00ffff', backgroundColor:'#111' }).setOrigin(0.5).setInteractive({ useHandCursor:true });
       btn.on('pointerup', ()=> this.scene.start('SoundSelect'));
     }
   }
