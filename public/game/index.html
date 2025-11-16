@@ -610,170 +610,99 @@ function _s4StartSong(scene){
 
     /* ------------ Scene 3 (follower NPC inside bounds) ------------ */
     3: {
-  manifest: {
-    images: [
-      { key: 'scene2', path: '/assets/scenes/scene2/scene2.png' },
-      // 🚗 auto: 3 frames para la animación
-      { key: 'scene2_auto1', path: '/assets/scenes/scene2/extra/auto.png' },
-      { key: 'scene2_auto2', path: '/assets/scenes/scene2/extra/auto2.png' },
-      { key: 'scene2_auto3', path: '/assets/scenes/scene2/extra/auto3.png' },
-    ]
-  },
+      manifest: { images:[ { key:'scene2', path:'/assets/scenes/scene2/scene2.png' } ] },
+      build(scene, container){
+        const baseImg = container.list.find(o => o.texture?.key?.startsWith('scene'));
+        if (!baseImg) return;
+        const pad = 12;
+        const b = baseImg.getBounds();
+        const left  = b.left  + pad;
+        const right = b.right - pad;
 
-  build(scene, container){
-    const baseImg = container.list.find(o => o.texture?.key?.startsWith('scene'));
-    if (!baseImg) return;
-    const pad = 12;
-    const b = baseImg.getBounds();
-    const left  = b.left  + pad;
-    const right = b.right - pad;
+        scene._npc3_bounds     = { left, right };
+        scene._npc3_waitLeftX  = left;
+        scene._npc3_waitRightX = right;
+        scene._npc3_followGap  = 30;
+        scene._npc3_lerp       = 0.20;
 
-    // ================= NPC FOLLOWER =================
-    scene._npc3_bounds     = { left, right };
-    scene._npc3_waitLeftX  = left;
-    scene._npc3_waitRightX = right;
-    scene._npc3_followGap  = 30;
-    scene._npc3_lerp       = 0.20;
+        const who   = GameState.character || 'joaquin';
+        const other = (who === 'sofia') ? 'joaquin' : 'sofia';
+        scene._npc3_other   = other;
+        scene._npc3_walkKey = `npc3_walk_${other}`;
 
-    const who   = GameState.character || 'joaquin';
-    const other = (who === 'sofia') ? 'joaquin' : 'sofia';
-    scene._npc3_other   = other;
-    scene._npc3_walkKey = `npc3_walk_${other}`;
+        if (!scene.anims.exists(scene._npc3_walkKey)) {
+          scene.anims.create({
+            key: scene._npc3_walkKey,
+            frames: [1,2,3,4,5,6].map(i => ({ key: `${other}_walk${i}` })),
+            frameRate: 12,
+            repeat: -1
+          });
+        }
 
-    if (!scene.anims.exists(scene._npc3_walkKey)) {
-      scene.anims.create({
-        key: scene._npc3_walkKey,
-        frames: [1,2,3,4,5,6].map(i => ({ key: `${other}_walk${i}` })),
-        frameRate: 12,
-        repeat: -1
-      });
-    }
+        if (!scene._npc3) {
+          scene._npc3 = scene.add
+            .sprite(scene._npc3_waitLeftX, scene.railY, `${other}_idle`)
+            .setOrigin(0.5, 1)
+            .setScale(0.2)
+            .setDepth(999)
+            .setFlipX(false);
+          scene._npc3_mode = 'left_wait';
+        } else {
+          scene._npc3.setDepth(999).setScale(0.2);
+          scene._npc3.x = Phaser.Math.Clamp(scene._npc3.x, left, right);
+        }
+      },
 
-    if (!scene._npc3) {
-      scene._npc3 = scene.add
-        .sprite(scene._npc3_waitLeftX, scene.railY, `${other}_idle`)
-        .setOrigin(0.5, 1)
-        .setScale(0.2)
-        .setDepth(999)
-        .setFlipX(false);
-      scene._npc3_mode = 'left_wait';
-    } else {
-      scene._npc3.setDepth(999).setScale(0.2);
-      scene._npc3.x = Phaser.Math.Clamp(scene._npc3.x, left, right);
-    }
+      enter(scene){
+        const npc = scene._npc3, lim = scene._npc3_bounds;
+        if (!npc || !lim) return;
+        const px = scene.player.x;
 
-    // ================= AUTO =================
-    // animación del auto
-// ================= AUTO =================
-scene._carAnimKey = 'scene2_auto_anim';
-if (!scene.anims.exists(scene._carAnimKey)) {
-  scene.anims.create({
-    key: scene._carAnimKey,
-    frames: [
-      { key: 'scene2_auto1' },
-      { key: 'scene2_auto2' },
-      { key: 'scene2_auto3' },
-    ],
-    frameRate: 10,
-    repeat: -1
-  });
-}
+        if (px >= lim.left && px <= lim.right) {
+          const gap = scene.player.flipX ? -scene._npc3_followGap : scene._npc3_followGap;
+          npc.x = Phaser.Math.Clamp(px + gap, lim.left, lim.right);
+          npc.setFlipX(scene.player.flipX);
+          scene._npc3_mode = 'follow';
+          scene.isMoving ? npc.play(scene._npc3_walkKey, true)
+                         : npc.setTexture(`${scene._npc3_other}_idle`);
+        } else {
+          if (px <  lim.left) { npc.x = scene._npc3_waitLeftX;  npc.setFlipX(false);  scene._npc3_mode = 'left_wait'; }
+          if (px >  lim.right){ npc.x = scene._npc3_waitRightX; npc.setFlipX(true);   scene._npc3_mode = 'right_wait'; }
+          npc.stop().setTexture(`${scene._npc3_other}_idle`);
+        }
+      },
 
-// límites para el movimiento del auto (un poco fuera del fondo)
-scene._carStartX = b.right + 80;
-scene._carEndX   = b.left  - 80;
-scene._carSpeed  = 80;      // puedes ajustar esto si quieres
+      leave(scene){
+        const npc = scene._npc3, lim = scene._npc3_bounds;
+        if (npc && lim){
+          const px = scene.player.x;
+          if (px <= lim.left)  { npc.x = scene._npc3_waitLeftX;  npc.setFlipX(false);  scene._npc3_mode = 'left_wait'; }
+          if (px >= lim.right) { npc.x = scene._npc3_waitRightX; npc.setFlipX(true);   scene._npc3_mode = 'right_wait'; }
+          npc.stop().setTexture(`${scene._npc3_other}_idle`);
+        }
+      },
 
-// cooldown entre autos (en segundos)
-scene._carCooldown = 5;
-scene._carActive   = true;   // si está en movimiento o no
+      update(scene){
+        const npc = scene._npc3, lim = scene._npc3_bounds;
+        if (!npc || !lim) return;
 
-if (!scene._car) {
-  // 🔹 Súbelo un poco: más arriba que el rail
-  const carY = scene.railY - 50;
+        const px = scene.player.x;
 
-  scene._car = scene.add
-    .sprite(scene._carStartX, carY, 'scene2_auto1')
-    .setOrigin(0.5, 1)
-    .setDepth(998)
-    .setScale(0.32)   // 🔹 más grande
-    .setFlipX(true);  // 🔹 mirando hacia la IZQUIERDA
+        if (px < lim.left) {
+          scene._npc3_mode = 'left_wait';
+          npc.x = scene._npc3_waitLeftX;
+          npc.setFlipX(false);
+          npc.stop().setTexture(`${scene._npc3_other}_idle`);
+          return;
+        }
+        if (px > lim.right) {
+          scene._npc3_mode = 'right_wait';
+          npc.x = scene._npc3_waitRightX;
+          npc.setFlipX(true);
+          npc.stop().setTexture(`${scene._npc3_other}_idle`);
+          return;
+        }
 
-  scene._car.play(scene._carAnimKey, true);
-
-  // Máscara tipo "overflow: hidden" del tamaño del fondo
-  const g = scene.add.graphics();
-  g.fillStyle(0xffffff, 1);
-  g.fillRect(b.left, b.top, b.width, b.height);
-  scene._carMaskGraphics = g;
-  scene._carMask = g.createGeometryMask();
-
-  scene._car.setMask(scene._carMask);
-} else {
-  scene._car.setDepth(998);
-}
-
-  },
-
-  enter(scene){
-    const npc = scene._npc3, lim = scene._npc3_bounds;
-    if (!npc || !lim) return;
-    const px = scene.player.x;
-
-    if (px >= lim.left && px <= lim.right) {
-      const gap = scene.player.flipX ? -scene._npc3_followGap : scene._npc3_followGap;
-      npc.x = Phaser.Math.Clamp(px + gap, lim.left, lim.right);
-      npc.setFlipX(scene.player.flipX);
-      scene._npc3_mode = 'follow';
-      scene.isMoving ? npc.play(scene._npc3_walkKey, true)
-                     : npc.setTexture(`${scene._npc3_other}_idle`);
-    } else {
-      if (px <  lim.left) { npc.x = scene._npc3_waitLeftX;  npc.setFlipX(false);  scene._npc3_mode = 'left_wait'; }
-      if (px >  lim.right){ npc.x = scene._npc3_waitRightX; npc.setFlipX(true);   scene._npc3_mode = 'right_wait'; }
-      npc.stop().setTexture(`${scene._npc3_other}_idle`);
-    }
-
-    // reactivar anim del auto al entrar a la zona
-    // reactivar anim del auto al entrar a la zona
-if (scene._car && scene._carAnimKey) {
-  scene._car.setVisible(true);
-  scene._car.play(scene._carAnimKey, true);
-  scene._carActive = true;
-}
-
-  },
-
-  leave(scene){
-    const npc = scene._npc3, lim = scene._npc3_bounds;
-    if (npc && lim){
-      const px = scene.player.x;
-      if (px <= lim.left)  { npc.x = scene._npc3_waitLeftX;  npc.setFlipX(false);  scene._npc3_mode = 'left_wait'; }
-      if (px >= lim.right) { npc.x = scene._npc3_waitRightX; npc.setFlipX(true);   scene._npc3_mode = 'right_wait'; }
-      npc.stop().setTexture(`${scene._npc3_other}_idle`);
-    }
-
-    // parar auto al salir de la zona (opcional)
-    if (scene._car) {
-      scene._car.stop();
-    }
-  },
-
-  update(scene){
-    const npc = scene._npc3, lim = scene._npc3_bounds;
-    if (npc && lim){
-      const px = scene.player.x;
-
-      if (px < lim.left) {
-        scene._npc3_mode = 'left_wait';
-        npc.x = scene._npc3_waitLeftX;
-        npc.setFlipX(false);
-        npc.stop().setTexture(`${scene._npc3_other}_idle`);
-      } else if (px > lim.right) {
-        scene._npc3_mode = 'right_wait';
-        npc.x = scene._npc3_waitRightX;
-        npc.setFlipX(true);
-        npc.stop().setTexture(`${scene._npc3_other}_idle`);
-      } else {
         scene._npc3_mode = 'follow';
         const gap     = scene.player.flipX ? -scene._npc3_followGap : scene._npc3_followGap;
         const targetX = Phaser.Math.Clamp(px + gap, lim.left, lim.right);
@@ -786,41 +715,12 @@ if (scene._car && scene._carAnimKey) {
             npc.play(scene._npc3_walkKey, true);
           }
           const pf = scene.player.anims.currentFrame, na = npc.anims.currentAnim;
-          if (pf && na && na.frames && na.frames[pf.index]) {
-            npc.anims.setCurrentFrame(na.frames[pf.index]);
-          }
+          if (pf && na && na.frames && na.frames[pf.index]) npc.anims.setCurrentFrame(na.frames[pf.index]);
         } else {
           npc.stop().setTexture(`${scene._npc3_other}_idle`);
         }
-      }
-    }
-
-    // ================= UPDATE AUTO =================
-// ================= UPDATE AUTO =================
-if (scene._car && typeof scene._carStartX === 'number' && typeof scene._carEndX === 'number') {
-  if (scene._carActive) {
-    const dt = scene.game.loop.delta / 1000; // segundos
-    scene._car.x -= scene._carSpeed * dt;
-
-    // cuando sale por la izquierda, lo escondemos y esperamos 5s
-    if (scene._car.x <= scene._carEndX) {
-      scene._carActive = false;
-      scene._car.setVisible(false);
-
-      scene.time.delayedCall(scene._carCooldown * 1000, () => {
-        if (!scene._car) return;
-        scene._car.x = scene._carStartX;
-        scene._car.setVisible(true);
-        scene._carActive = true;
-        scene._car.play(scene._carAnimKey, true);
-      }, null, scene);
-    }
-  }
-}
-
-  },
-},
-
+      },
+    },
 
     /* ------------ Scene 4 (bench + song) ------------ */
     4: {
