@@ -345,9 +345,10 @@ useEffect(() => {
       </section>
 
       {/* GALLERY */}
-      <section className="relative w-full px-4 py-12 sm:py-16">
-        <Gallery />
-      </section>
+     <section className="relative w-full px-4 py-12 sm:py-16 bg-black">
+  <Gallery />
+</section>
+
     </main>
   );
 }
