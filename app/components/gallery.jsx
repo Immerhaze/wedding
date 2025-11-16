@@ -2,6 +2,9 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
+// 👇 Flip this to true on the wedding day
+const GUEST_UPLOAD_ENABLED = false;
+
 // --- EXIF ORIENTATION (JPEG) ---
 async function getJpegOrientation(file) {
   // Solo JPEG; otras extensiones no traen este flag útil
@@ -103,7 +106,14 @@ export default function Gallery({
   const [loading, setLoading] = useState(photos.length === 0);
   const inputRef = useRef(null);
 
-  const openPicker = () => inputRef.current?.click();
+  // Scroll / visibility
+  const sectionRef = useRef(null);
+  const [showFab, setShowFab] = useState(false);
+
+  const openPicker = () => {
+    if (!GUEST_UPLOAD_ENABLED) return;
+    inputRef.current?.click();
+  };
 
   // ===== compresión + corrección de orientación (iPhone) =====
   async function compressImage(file, maxSide = 2000, quality = 0.82) {
@@ -215,8 +225,34 @@ export default function Gallery({
     return () => clearInterval(interval);
   }, []);
 
+  // ===== Scroll watcher para mostrar/ocultar botón =====
+  useEffect(() => {
+    const handler = () => {
+      const el = sectionRef.current;
+      if (!el) return;
+
+      const rect = el.getBoundingClientRect();
+      const mid = window.innerHeight / 2;
+
+      const shouldShow = rect.top < mid && rect.bottom > 80;
+      setShowFab(shouldShow);
+    };
+
+    handler(); // al cargar
+
+    window.addEventListener('scroll', handler, { passive: true });
+    window.addEventListener('resize', handler);
+
+    return () => {
+      window.removeEventListener('scroll', handler);
+      window.removeEventListener('resize', handler);
+    };
+  }, []);
+
   // ===== handler de subida =====
   async function handleFileChange(e) {
+    if (!GUEST_UPLOAD_ENABLED) return;
+
     const f = e.target.files?.[0];
     e.currentTarget.value = '';
     if (!f) return;
@@ -237,7 +273,6 @@ export default function Gallery({
     } catch (err) {
       console.error(err);
       alert('No se pudo procesar la foto. Inténtalo otra vez.');
-      // limpia el temp si quedó
       setPhotos((p) => p.filter((x) => !x.id.startsWith('temp_')));
     } finally {
       if (localURL) URL.revokeObjectURL(localURL);
@@ -257,7 +292,11 @@ export default function Gallery({
   );
 
   return (
-    <section id="guest-photos" className="relative w-full bg-[#0a0a0a] text-neutral-200 py-16 md:py-24">
+    <section
+      id="guest-photos"
+      ref={sectionRef}
+      className="relative w-full bg-black text-neutral-200 py-16 md:py-24"
+    >
       <div className="mx-auto max-w-7xl px-4">
         <header className="mb-8 md:mb-12">
           <h2 className="text-center font-serif text-3xl md:text-5xl tracking-tight">{title}</h2>
@@ -328,23 +367,28 @@ export default function Gallery({
         </div>
       </div>
 
-      {/* FAB solo móvil */}
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handleFileChange}
-      />
-      <button
-        onClick={openPicker}
-        className="md:hidden fixed bottom-5 right-5 z-50 rounded-full px-5 py-4 shadow-xl border border-white/20 bg-white/90 text-black active:scale-95 transition"
-        aria-label="Subir una foto"
-        disabled={busy}
-      >
-        {busy ? 'Procesando…' : 'Subir foto'}
-      </button>
+      {/* FAB solo móvil + solo si la funcionalidad está activada */}
+      {GUEST_UPLOAD_ENABLED && (
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+      )}
+
+      {GUEST_UPLOAD_ENABLED && showFab && (
+        <button
+          onClick={openPicker}
+          className="md:hidden fixed bottom-5 right-5 z-50 rounded-full px-5 py-4 shadow-xl border border-white/20 bg-white/90 text-black active:scale-95 transition"
+          aria-label="Subir una foto"
+          disabled={busy}
+        >
+          {busy ? 'Procesando…' : 'Subir foto'}
+        </button>
+      )}
     </section>
   );
 }
