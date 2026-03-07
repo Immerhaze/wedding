@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 // 👇 Flip this to true on the wedding day
-const GUEST_UPLOAD_ENABLED = false;
+const GUEST_UPLOAD_ENABLED = true;
 
 // --- EXIF ORIENTATION (JPEG) ---
 async function getJpegOrientation(file) {
