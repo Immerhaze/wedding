@@ -1,11 +1,8 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
-const GUEST_UPLOAD_ENABLED = true;
-
-// ── Static wedding photos (served from /public, no Supabase needed) ──
-// To add more: copy file to public/assets/weddingpics/ and add an entry here.
+// ── Static wedding photos (served from /public) ──
 const STATIC_PHOTOS = [
   { id: 'static_1',  src: '/assets/weddingpics/03-06-26-1.jpg' },
   { id: 'static_2',  src: '/assets/weddingpics/03-06-26-12.jpg' },
@@ -51,61 +48,6 @@ const STATIC_PHOTOS = [
   { id: 'static_42', src: '/assets/weddingpics/03-06-26-229.jpg' },
 ];
 
-// ── EXIF orientation helper (for iPhone uploads) ──
-async function getJpegOrientation(file) {
-  if (!/jpe?g$/i.test(file.name || '')) return 1;
-  const buf = await file.slice(0, 128 * 1024).arrayBuffer();
-  const view = new DataView(buf);
-  if (view.getUint16(0, false) !== 0xFFD8) return 1;
-  let offset = 2;
-  while (offset + 4 <= view.byteLength) {
-    const marker = view.getUint16(offset, false); offset += 2;
-    const size   = view.getUint16(offset, false); offset += 2;
-    if (marker === 0xFFE1) {
-      if (view.getUint32(offset, false) !== 0x45786966) return 1;
-      const tiffOff = offset + 6;
-      const little  = view.getUint16(tiffOff, false) === 0x4949;
-      const getU16  = (p) => view.getUint16(p, little);
-      const getU32  = (p) => view.getUint32(p, little);
-      const firstIFD = tiffOff + getU32(tiffOff + 4);
-      const entries  = getU16(firstIFD);
-      for (let i = 0; i < entries; i++) {
-        const p = firstIFD + 2 + i * 12;
-        if (getU16(p) === 0x0112) return getU16(p + 8) || 1;
-      }
-      return 1;
-    } else if ((marker & 0xFFF0) !== 0xFFE0) {
-      break;
-    } else {
-      offset += size - 2;
-    }
-  }
-  return 1;
-}
-
-function drawOriented(ctx, img, w, h, orientation) {
-  switch (orientation) {
-    case 6: ctx.canvas.width = h; ctx.canvas.height = w; ctx.translate(h, 0); ctx.rotate(Math.PI / 2);  ctx.drawImage(img, 0, 0, w, h); break;
-    case 8: ctx.canvas.width = h; ctx.canvas.height = w; ctx.translate(0, w); ctx.rotate(-Math.PI / 2); ctx.drawImage(img, 0, 0, w, h); break;
-    case 3: ctx.canvas.width = w; ctx.canvas.height = h; ctx.translate(w, h); ctx.rotate(Math.PI);      ctx.drawImage(img, 0, 0, w, h); break;
-    default: ctx.canvas.width = w; ctx.canvas.height = h; ctx.drawImage(img, 0, 0, w, h);
-  }
-}
-
-function canvasToBlob(canvas, type = 'image/jpeg', quality = 0.82) {
-  return new Promise((resolve) => {
-    if (canvas.toBlob) {
-      canvas.toBlob((b) => resolve(b), type, quality);
-    } else {
-      const dataURL = canvas.toDataURL(type, quality);
-      const bin = atob(dataURL.split(',')[1]);
-      const arr = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      resolve(new Blob([arr], { type }));
-    }
-  });
-}
-
 // ── Decorative diamond SVG ──
 function Diamond() {
   return (
@@ -115,17 +57,11 @@ function Diamond() {
   );
 }
 
-export default function Gallery({ onUpload }) {
-  const [guestPhotos, setGuestPhotos]   = useState([]);
-  const photos = [...guestPhotos, ...STATIC_PHOTOS];
-  const [busy, setBusy]                 = useState(false);
+export default function Gallery() {
   const [lightboxIdx, setLightboxIdx]   = useState(null);
   const [headerVisible, setHeaderVisible] = useState(false);
   const [gridVisible, setGridVisible]   = useState(false);
-  const [showFab, setShowFab]           = useState(false);
 
-  const inputRef  = useRef(null);
-  const sectionRef = useRef(null);
   const headerRef = useRef(null);
   const gridRef   = useRef(null);
 
@@ -134,12 +70,12 @@ export default function Gallery({ onUpload }) {
     if (lightboxIdx === null) return;
     const onKey = (e) => {
       if (e.key === 'Escape')     setLightboxIdx(null);
-      if (e.key === 'ArrowRight') setLightboxIdx((i) => (i + 1) % photos.length);
-      if (e.key === 'ArrowLeft')  setLightboxIdx((i) => (i - 1 + photos.length) % photos.length);
+      if (e.key === 'ArrowRight') setLightboxIdx((i) => (i + 1) % STATIC_PHOTOS.length);
+      if (e.key === 'ArrowLeft')  setLightboxIdx((i) => (i - 1 + STATIC_PHOTOS.length) % STATIC_PHOTOS.length);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [lightboxIdx, photos.length]);
+  }, [lightboxIdx]);
 
   // ── Scroll lock when lightbox is open ──
   useEffect(() => {
@@ -171,123 +107,14 @@ export default function Gallery({ onUpload }) {
     return () => obs.disconnect();
   }, []);
 
-  // ── Load guest photos from Supabase (fails silently — static photos always show) ──
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/guest-photos', { cache: 'no-store' });
-        if (!res.ok || cancelled) return;
-        const { photos: list } = await res.json();
-        if (cancelled) return;
-        setGuestPhotos((list || []).map((p) => ({ id: p.id, src: p.signedUrl, created_at: p.created_at })));
-      } catch {
-        // Supabase unavailable — static photos still show
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  // ── Refresh Supabase signed URLs every 8 min ──
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/guest-photos', { cache: 'no-store' });
-        if (!res.ok) return;
-        const { photos: list } = await res.json();
-        const refreshed = Object.fromEntries((list || []).map((p) => [p.id, p.signedUrl]));
-        setGuestPhotos((prev) => prev.map((ph) => refreshed[ph.id] ? { ...ph, src: refreshed[ph.id] } : ph));
-      } catch {}
-    }, 8 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // ── Show/hide mobile FAB ──
-  useEffect(() => {
-    const handler = () => {
-      const el = sectionRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      setShowFab(rect.top < window.innerHeight / 2 && rect.bottom > 80);
-    };
-    handler();
-    window.addEventListener('scroll', handler, { passive: true });
-    window.addEventListener('resize', handler);
-    return () => { window.removeEventListener('scroll', handler); window.removeEventListener('resize', handler); };
-  }, []);
-
-  // ── Image compression + EXIF correction for uploads ──
-  async function compressImage(file, maxSide = 2000, quality = 0.82) {
-    const orientation = await getJpegOrientation(file);
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.src = url;
-    await new Promise((resolve, reject) => {
-      if (img.decode) {
-        img.decode().then(resolve).catch(() => { img.onload = resolve; img.onerror = reject; });
-      } else {
-        img.onload = resolve; img.onerror = reject;
-      }
-    });
-    const w = img.naturalWidth  || img.width;
-    const h = img.naturalHeight || img.height;
-    const scale = Math.min(1, maxSide / Math.max(w, h));
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
-    ctx.imageSmoothingQuality = 'high';
-    drawOriented(ctx, img, Math.round(w * scale), Math.round(h * scale), orientation);
-    URL.revokeObjectURL(url);
-    return canvasToBlob(canvas, 'image/jpeg', quality);
-  }
-
-  const defaultUpload = useMemo(() => async (file) => {
-    const form = new FormData();
-    form.append('file', file);
-    const res = await fetch('/api/guest-photos', { method: 'POST', body: form });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json?.error || 'Upload failed');
-    const saved = json.saved;
-    const re = await fetch('/api/guest-photos', { cache: 'no-store' });
-    const { photos: list } = await re.json();
-    const hit = (list || []).find((p) => p.id === saved.id);
-    return { id: saved.id, src: hit?.signedUrl || '', created_at: saved.created_at };
-  }, []);
-
-  const doUpload = onUpload || defaultUpload;
-
-  async function handleFileChange(e) {
-    const f = e.target.files?.[0];
-    e.currentTarget.value = '';
-    if (!f) return;
-    let localURL;
-    try {
-      setBusy(true);
-      const blob = await compressImage(f);
-      const compressed = new File([blob], `guest_${Date.now()}.jpg`, { type: 'image/jpeg' });
-      localURL = URL.createObjectURL(compressed);
-      const temp = { id: `temp_${Date.now()}`, src: localURL };
-      setGuestPhotos((p) => [temp, ...p]);
-      const saved = await doUpload(compressed);
-      setGuestPhotos((p) => [saved, ...p.filter((x) => x.id !== temp.id)]);
-    } catch (err) {
-      console.error(err);
-      alert('No se pudo procesar la foto. Inténtalo otra vez.');
-      setGuestPhotos((p) => p.filter((x) => !x.id.startsWith('temp_')));
-    } finally {
-      if (localURL) URL.revokeObjectURL(localURL);
-      setBusy(false);
-    }
-  }
-
   // ── Lightbox helpers ──
   const closeLightbox = () => setLightboxIdx(null);
-  const prevPhoto = (e) => { e.stopPropagation(); setLightboxIdx((i) => (i - 1 + photos.length) % photos.length); };
-  const nextPhoto = (e) => { e.stopPropagation(); setLightboxIdx((i) => (i + 1) % photos.length); };
+  const prevPhoto = (e) => { e.stopPropagation(); setLightboxIdx((i) => (i - 1 + STATIC_PHOTOS.length) % STATIC_PHOTOS.length); };
+  const nextPhoto = (e) => { e.stopPropagation(); setLightboxIdx((i) => (i + 1) % STATIC_PHOTOS.length); };
 
   return (
     <section
       id="gallery"
-      ref={sectionRef}
       className="relative w-full bg-[#080808] text-neutral-200 pt-24 pb-32 overflow-hidden"
     >
       {/* Subtle grain texture */}
@@ -341,7 +168,7 @@ export default function Gallery({ onUpload }) {
           className="columns-2 sm:columns-2 md:columns-3 [column-fill:balance]"
           style={{ fontSize: 0, columnGap: '3px' }}
         >
-          {photos.map((ph, idx) => (
+          {STATIC_PHOTOS.map((ph, idx) => (
             <figure
               key={ph.id}
               onClick={() => setLightboxIdx(idx)}
@@ -364,18 +191,6 @@ export default function Gallery({ onUpload }) {
                   scale-100 group-hover:scale-[1.04]
                   transition-all duration-500 ease-out will-change-transform"
                 style={{ contentVisibility: 'auto' }}
-                onError={async () => {
-                  if (ph.id.startsWith('static_')) return;
-                  try {
-                    const res = await fetch('/api/guest-photos', { cache: 'no-store' });
-                    if (!res.ok) return;
-                    const { photos: list } = await res.json();
-                    const hit = (list || []).find((p) => p.id === ph.id);
-                    if (hit?.signedUrl) {
-                      setGuestPhotos((prev) => prev.map((x) => x.id === ph.id ? { ...x, src: hit.signedUrl } : x));
-                    }
-                  } catch {}
-                }}
               />
               {/* Hover overlay */}
               <div className="pointer-events-none absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors duration-400" />
@@ -393,7 +208,7 @@ export default function Gallery({ onUpload }) {
         >
           {/* Photo counter */}
           <div className="absolute top-5 left-1/2 -translate-x-1/2 text-white/30 text-[11px] tracking-[0.4em] uppercase select-none">
-            {lightboxIdx + 1} &nbsp;/&nbsp; {photos.length}
+            {lightboxIdx + 1} &nbsp;/&nbsp; {STATIC_PHOTOS.length}
           </div>
 
           {/* Close button */}
@@ -418,7 +233,7 @@ export default function Gallery({ onUpload }) {
 
           {/* Photo */}
           <img
-            src={photos[lightboxIdx]?.src}
+            src={STATIC_PHOTOS[lightboxIdx]?.src}
             alt="Wedding photo"
             className="max-w-[84vw] max-h-[86vh] object-contain select-none"
             onClick={(e) => e.stopPropagation()}
@@ -441,35 +256,6 @@ export default function Gallery({ onUpload }) {
             ← → para navegar · Esc para cerrar
           </p>
         </div>
-      )}
-
-      {/* Upload file input */}
-      {GUEST_UPLOAD_ENABLED && (
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-      )}
-
-      {/* Mobile FAB */}
-      {GUEST_UPLOAD_ENABLED && showFab && (
-        <button
-          onClick={() => inputRef.current?.click()}
-          disabled={busy}
-          className="md:hidden fixed bottom-6 right-6 z-50 flex items-center gap-2
-            px-5 py-3.5 rounded-full
-            bg-white text-black text-sm font-medium tracking-wide
-            shadow-[0_8px_32px_rgba(0,0,0,0.6)]
-            border border-white/10
-            active:scale-95 transition-transform disabled:opacity-50"
-          aria-label="Subir una foto"
-        >
-          {busy ? 'Procesando…' : '+ Foto'}
-        </button>
       )}
     </section>
   );
