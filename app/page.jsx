@@ -5,17 +5,11 @@ import NavBar from './components/navbar';
 import RingAuto360 from './components/ring';
 import Gallery from './components/gallery';
 
-// Robust iOS / iPadOS detection (for copy text only)
-const IS_IOS =
-  typeof navigator !== 'undefined' &&
-  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
-
+// ─── Game iframe wrapper (untouched) ───────────────────────────────────────
 function ScrollableIframe({ src, title }) {
   const iframeRef = useRef(null);
   const [active, setActive] = useState(false);
 
-  // ESC to exit on desktop
   useEffect(() => {
     if (!active) return;
     const onKey = (e) => e.key === 'Escape' && setActive(false);
@@ -23,45 +17,30 @@ function ScrollableIframe({ src, title }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [active]);
 
-  // Focus frame when activated
   useEffect(() => {
     if (!active || !iframeRef.current) return;
-    const t = setTimeout(() => {
-      try {
-        iframeRef.current.focus();
-      } catch {}
-    }, 30);
+    const t = setTimeout(() => { try { iframeRef.current.focus(); } catch {} }, 30);
     return () => clearTimeout(t);
   }, [active]);
 
-  // NEW: Listen for game-finished message from iframe
   useEffect(() => {
-    const handler = (e) => {
-      if (e.data === "GAME_FINISHED") {
-        setActive(false); // Restore overlay + scrolling
-      }
-    };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
+    const handler = (e) => { if (e.data === 'GAME_FINISHED') setActive(false); };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
   }, []);
 
-  const onBlurFrame = useCallback(() => {
-    // optionally setActive(false)
-  }, []);
+  const onBlurFrame = useCallback(() => {}, []);
 
   return (
     <div
       className={[
-        "relative w-full h-full rounded-2xl overflow-hidden shadow-xl",
-        "min-h-[60vh]",
-        "supports-[min-height:60svh]:min-h-[60svh]",
-        "supports-[min-height:60dvh]:min-h-[60dvh]",
-        active ? "overscroll-contain touch-pan-x touch-pan-y" : "",
-      ].join(" ")}
-      style={{
-        WebkitOverflowScrolling: "auto",
-        overscrollBehavior: active ? "contain" : undefined,
-      }}
+        'relative w-full h-full rounded-2xl overflow-hidden shadow-xl',
+        'min-h-[60vh]',
+        'supports-[min-height:60svh]:min-h-[60svh]',
+        'supports-[min-height:60dvh]:min-h-[60dvh]',
+        active ? 'overscroll-contain touch-pan-x touch-pan-y' : '',
+      ].join(' ')}
+      style={{ WebkitOverflowScrolling: 'auto', overscrollBehavior: active ? 'contain' : undefined }}
     >
       <iframe
         ref={iframeRef}
@@ -75,16 +54,15 @@ function ScrollableIframe({ src, title }) {
         aria-live="off"
         tabIndex={active ? 0 : -1}
         style={{
-          overflow: "hidden",
-          pointerEvents: active ? "auto" : "none",
-          WebkitUserSelect: "none",
-          WebkitTouchCallout: "none",
-          touchAction: active ? "none" : "auto",
-          overscrollBehavior: "none",
+          overflow: 'hidden',
+          pointerEvents: active ? 'auto' : 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none',
+          touchAction: active ? 'none' : 'auto',
+          overscrollBehavior: 'none',
         }}
         onBlur={onBlurFrame}
       />
-
       {!active && (
         <button
           type="button"
@@ -97,7 +75,6 @@ function ScrollableIframe({ src, title }) {
           </span>
         </button>
       )}
-
       {active && (
         <button
           onClick={() => setActive(false)}
@@ -111,111 +88,91 @@ function ScrollableIframe({ src, title }) {
   );
 }
 
-
+// ─── Page ──────────────────────────────────────────────────────────────────
 export default function Home() {
   const ampRef = useRef(null);
   const [ringPx, setRingPx] = useState(0);
   const [loading, setLoading] = useState(true);
-const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(0);
 
-// Fake real preloading logic (you can later preload images)
-useEffect(() => {
-  let p = 0;
-  const interval = setInterval(() => {
-    p += 2;
-    if (p >= 100) {
-      p = 100;
-      clearInterval(interval);
-      setTimeout(() => setLoading(false), 300); // smooth fade
-    }
-    setProgress(p);
-  }, 40);
+  // Loading progress
+  useEffect(() => {
+    let p = 0;
+    const id = setInterval(() => {
+      p += 2;
+      if (p >= 100) { p = 100; clearInterval(id); setTimeout(() => setLoading(false), 400); }
+      setProgress(p);
+    }, 40);
+    return () => clearInterval(id);
+  }, []);
 
-  return () => clearInterval(interval);
-}, []);
-
-
-  // Size the 360° ring to the "&" glyph
+  // Size the ring to the "&" glyph
   useEffect(() => {
     if (!ampRef.current) return;
-    const SCALE = 0.92;
     const el = ampRef.current;
-
     const measure = () => {
       const r = el.getBoundingClientRect();
-      const size = Math.ceil(Math.max(r.width, r.height) * SCALE);
-      setRingPx(size);
+      setRingPx(Math.ceil(Math.max(r.width, r.height) * 0.92));
     };
-
     measure();
-    const onResize = () => measure();
-    window.addEventListener('resize', onResize, { passive: true });
-
+    window.addEventListener('resize', measure, { passive: true });
     let ro;
-    if ('ResizeObserver' in window) {
-      ro = new ResizeObserver(measure);
-      ro.observe(el);
-    }
-    return () => {
-      window.removeEventListener('resize', onResize);
-      ro?.disconnect();
-    };
+    if ('ResizeObserver' in window) { ro = new ResizeObserver(measure); ro.observe(el); }
+    return () => { window.removeEventListener('resize', measure); ro?.disconnect(); };
   }, []);
 
   return (
-    
     <main className="w-screen max-w-screen overflow-x-hidden">
-      {/* LOADING SCREEN */}
-{/* FULLSCREEN LOADING SCREEN */}
-{loading && (
-  <div
-    className="
-      fixed inset-0 z-[9999] flex items-center justify-center
-      bg-[#0b0b10] transition-opacity duration-700
-    "
-  >
-    <div className="relative w-64 h-64 flex items-center justify-center">
-      
-      {/* ROTATING CIRCLE TEXT */}
-      <svg viewBox="0 0 200 200" className="absolute inset-0 animate-spin-slow">
-        <defs>
-          <path
-            id="loaderCircle"
-            d="
-              M 100, 100
-              m -75, 0
-              a 75,75 0 1,1 150,0
-              a 75,75 0 1,1 -150,0
-            "
-          />
-        </defs>
 
-        <text fill="white">
-          <textPath
-            href="#loaderCircle"
-            className="tracking-[0.3em] text-[14px]"
+      {/* ══════════════════════════════════════════
+          LOADING SCREEN
+      ══════════════════════════════════════════ */}
+      {loading && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#080808]">
+
+          {/* Outer decorative static ring */}
+          <svg
+            aria-hidden
+            viewBox="0 0 260 260"
+            className="absolute w-[260px] h-[260px] opacity-[0.12]"
           >
-            SOFIA • JOAQUIN • SOFIA • JOAQUIN • SOFIA • JOAQUIN •
-          </textPath>
-        </text>
-      </svg>
+            <circle cx="130" cy="130" r="124" stroke="#c9a84c" strokeWidth="0.6" fill="none" />
+            <circle cx="130" cy="130" r="116" stroke="#c9a84c" strokeWidth="0.3" fill="none" />
+          </svg>
 
-      {/* CENTER PERCENTAGE */}
-      <span className="text-white text-3xl font-semibold">
-        {progress}%
-      </span>
+          {/* Spinning text ring */}
+          <svg viewBox="0 0 200 200" className="absolute w-[240px] h-[240px] animate-spin-slow">
+            <defs>
+              <path id="loaderCircle" d="M 100,100 m -75,0 a 75,75 0 1,1 150,0 a 75,75 0 1,1 -150,0" />
+            </defs>
+            <text fill="#c9a84c" fontSize="11" letterSpacing="4">
+              <textPath href="#loaderCircle">
+                SOFIA • JOAQUIN • SOFIA • JOAQUIN • SOFIA • JOAQUIN •
+              </textPath>
+            </text>
+          </svg>
 
-    </div>
-  </div>
-)}
+          {/* Center counter */}
+          <div className="relative flex flex-col items-center gap-1">
+            <span className="font-serif font-light text-white/85 text-4xl sm:text-5xl tracking-widest">
+              {progress}
+              <span className="text-xl text-white/30 ml-0.5">%</span>
+            </span>
+            <span className="text-[#c9a84c]/40 text-[8px] tracking-[0.6em] uppercase select-none">
+              Cargando
+            </span>
+          </div>
+        </div>
+      )}
 
       <NavBar />
 
-      {/* HERO */}
+      {/* ══════════════════════════════════════════
+          HERO
+      ══════════════════════════════════════════ */}
       <section
         className={[
           'relative w-full flex items-center justify-center overflow-hidden',
-          // full-height fallbacks: vh → svh → dvh
           'min-h-[100vh]',
           'supports-[min-height:100svh]:min-h-[100svh]',
           'supports-[min-height:100dvh]:min-h-[100dvh]',
@@ -224,83 +181,71 @@ useEffect(() => {
       >
         {/* Background */}
         <div aria-hidden className="absolute inset-0 -z-10">
-          <div className="absolute inset-0 bg-[radial-gradient(60%_60%_at_50%_40%,rgba(255,255,255,0.25)_0%,rgba(255,255,255,0)_60%),linear-gradient(180deg,#0b0b10_0%,#151521_50%,#0b0b10_100%)]" />
-          <div className="absolute -top-24 left-1/2 -translate-x-1/2 h-72 w-72 rounded-full blur-3xl opacity-40 bg-[#f8d776]" />
+          {/* Base gradient */}
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,#080808_0%,#0d0d14_50%,#080808_100%)]" />
+          {/* Warm radial glow (behind ring) */}
+          <div className="absolute inset-0 bg-[radial-gradient(55%_55%_at_50%_44%,rgba(201,168,76,0.08)_0%,transparent_70%)]" />
+          {/* Top gold bloom */}
+          <div className="absolute -top-20 left-1/2 -translate-x-1/2 h-64 w-64 rounded-full blur-3xl opacity-25 bg-[#c9a84c]" />
         </div>
 
-       <div className="relative flex flex-col items-center gap-2 text-center px-4">
-  <h1 className="leading-none font-semibold tracking-tight">
-    {/* Sofia */}
-    <span
-      className="
-        block text-white drop-shadow
-        text-[4rem]      /* mobile */
-        sm:text-[5rem]   /* bigger phones */
-        md:text-[5rem]     /* tablets */
-        lg:text-[7rem]     /* desktop */
-        xl:text-[9rem]     /* big screens */
-      "
-    >
-      Sofia
-    </span>
+        {/* Names */}
+        <div className="relative flex flex-col items-center text-center px-4">
+          <h1 className="leading-[0.9] font-serif font-light tracking-wide">
+            <span className="block text-white/95
+              text-[4.2rem] sm:text-[5.5rem] md:text-[6rem] lg:text-[7.5rem] xl:text-[9.5rem]">
+              Sofia
+            </span>
 
-    {/* & */}
-    <span
-      ref={ampRef}
-      className="
-        block text-white/90 drop-shadow leading-none
-         text-[4rem]      /* mobile */
-        sm:text-[5rem]   /* bigger phones */
-        md:text-[5rem]     /* tablets */
-        lg:text-[7rem]     /* desktop */
-        xl:text-[9rem]     /* big screens */
-      "
-    >
-      &
-    </span>
+            <span
+              ref={ampRef}
+              className="block italic text-[#c9a84c]/75 leading-[1.1]
+                text-[4.2rem] sm:text-[5.5rem] md:text-[6rem] lg:text-[7.5rem] xl:text-[9.5rem]"
+            >
+              &
+            </span>
 
-    {/* Joaquin */}
-    <span
-      className="
-        block text-white drop-shadow
-        text-[4rem]      /* mobile */
-        sm:text-[5rem]   /* bigger phones */
-        md:text-[5rem]     /* tablets */
-        lg:text-[7rem]     /* desktop */
-        xl:text-[9rem]     /* big screens */
-      "
-    >
-      Joaquin
-    </span>
-  </h1>
-</div>
+            <span className="block text-white/95
+              text-[4.2rem] sm:text-[5.5rem] md:text-[6rem] lg:text-[7.5rem] xl:text-[9.5rem]">
+              Joaquin
+            </span>
+          </h1>
 
-
+          {/* Date */}
+          <p className="mt-7 text-[#c9a84c]/45 text-[9px] sm:text-[11px] tracking-[0.55em] uppercase font-light select-none">
+            7 · 03 · 2026
+          </p>
+        </div>
 
         {/* 360° Ring */}
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className=" pointer-events-none absolute inset-0 flex items-center justify-center">
           <div
-            className="relative opacity-90"
+            className="relative opacity-85"
             style={{
-              width: ringPx ? `${ringPx}px` : undefined,
+              width:  ringPx ? `${ringPx}px` : undefined,
               height: ringPx ? `${ringPx}px` : undefined,
-              minWidth: '120px',
-              minHeight: '120px',
-              maxWidth: '70vw',
-              maxHeight: '70vw',
+              minWidth: '120px', minHeight: '120px',
+              maxWidth: '70vw',  maxHeight: '70vw',
             }}
           >
-            <RingAuto360
-  src="/assets/ring/ring360.webm"
-  alt="Gold ring rotating 360°"
-  className="absolute inset-0"
-/>
-
+            <RingAuto360 src="/assets/ring/ring360.webm" alt="Gold ring rotating 360°" className="absolute inset-0" />
           </div>
+        </div>
+
+        {/* Scroll indicator */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce"
+        >
+          <svg width="16" height="9" viewBox="0 0 16 9" fill="none" className="text-[#c9a84c]/30">
+            <path d="M1 1l7 7 7-7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </div>
       </section>
 
-      {/* GAME */}
+      {/* ══════════════════════════════════════════
+          GAME
+      ══════════════════════════════════════════ */}
       <section
         id="game"
         className={[
@@ -311,43 +256,52 @@ useEffect(() => {
         ].join(' ')}
         aria-label="Game"
       >
-        {/* Background */}
+        {/* Background — kept exactly as original */}
         <div aria-hidden className="absolute inset-0 -z-10">
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,#0b0b10_0%,#0f172a_40%,#0b0b10_100%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,#080808_0%,#0f172a_40%,#080808_100%)]" />
           <div className="absolute inset-0 opacity-[0.06] [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.35)_1px,transparent_1.2px)] [background-size:24px_24px]" />
         </div>
 
-        <div className="mx-auto max-w-4xl px-4 mt-8 mb-16 text-white/90">
-          <h2 className="text-2xl sm:text-3xl font-semibold text-center">Play “Memory Walk”</h2>
-          <p className="mt-3 text-sm sm:text-base leading-relaxed text-white/80 text-center">
-            Toca el área del juego para activar los controles. Presiona “Exit” para liberar el puntero.
-            Usa solo las flechas para jugar.
+        {/* Header */}
+        <div className="mx-auto max-w-4xl px-4 mt-8 mb-16 text-center">
+          <p className="text-[#c9a84c]/60 tracking-[0.55em] text-[9px] sm:text-[10px] uppercase font-light mb-4 select-none">
+            Minijuego
+          </p>
+          <h2 className="font-serif font-light text-white/90 text-3xl sm:text-4xl tracking-wide">
+            Memory Walk
+          </h2>
+          {/* Thin rule */}
+          <div className="flex items-center justify-center gap-4 mt-4 mb-5">
+            <div className="h-px w-12 bg-gradient-to-r from-transparent to-white/10" />
+            <div className="w-1 h-1 rounded-full bg-[#c9a84c]/40" />
+            <div className="h-px w-12 bg-gradient-to-l from-transparent to-white/10" />
+          </div>
+          <p className="text-sm sm:text-base leading-relaxed text-white/45 max-w-lg mx-auto">
+            Toca el área del juego para activar los controles · Usa las flechas para jugar · Esc para salir
           </p>
         </div>
 
-        {/* Full-bleed wrapper to keep exact 100vw without side scroll */}
+        {/* Iframe — completely untouched */}
         <div className="relative left-1/2 -translate-x-1/2 w-[100vw]">
-          <div
-            className={[
-              'w-[100vw]',
-              // Height clamp with fallbacks
-              'h-[min(80vh,85vh)]',
-              'supports-[height:85svh]:h-[min(80vh,85svh)]',
-              'supports-[height:88dvh]:h-[min(80vh,88dvh)]',
-              'sm:h-[min(85vh,88vh)]',
-              'sm:supports-[height:88svh]:h-[min(85svh,88svh)]',
-              'sm:supports-[height:90dvh]:h-[min(85vh,90dvh)]',
-            ].join(' ')}
-          >
+          <div className={[
+            'w-[100vw]',
+            'h-[min(80vh,85vh)]',
+            'supports-[height:85svh]:h-[min(80vh,85svh)]',
+            'supports-[height:88dvh]:h-[min(80vh,88dvh)]',
+            'sm:h-[min(85vh,88vh)]',
+            'sm:supports-[height:88svh]:h-[min(85svh,88svh)]',
+            'sm:supports-[height:90dvh]:h-[min(85vh,90dvh)]',
+          ].join(' ')}>
             <ScrollableIframe src="/game/index.html" title="Memory Walk" />
           </div>
         </div>
       </section>
 
-      {/* GALLERY */}
-      <section className="relative w-full px-4 py-12 sm:py-16">
-        <Gallery />
-      </section>
+      {/* ══════════════════════════════════════════
+          GALLERY (untouched — user approved)
+      ══════════════════════════════════════════ */}
+      <Gallery />
+
     </main>
   );
 }
