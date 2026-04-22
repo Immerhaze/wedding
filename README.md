@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+<div align="center">
+Interactive Wedding Experience
+A side-scrolling, game-like e-invite built with Next.js and PixiJS
+Not your typical wedding invitation — a fully interactive, scroll-driven narrative with animated sprites, cinematic transitions and a mobile-first immersive layout.
+Mostrar imagen
+Mostrar imagen
+Mostrar imagen
+Mostrar imagen
+🔗 Live Experience · 🛠 Stack
+</div>
 
-## Getting Started
+✨ Overview
+A one-of-a-kind e-invite for my little sister's wedding. Instead of a static page, I built a side-scrolling interactive experience where each chapter of the couple's story unfolds as the user scrolls — animated sprites, parallax backgrounds, environmental transitions and real-time interaction.
 
-First, run the development server:
+Think of it as a browser-native mini-game that happens to be a wedding invitation.
 
-```bash
+📸 Screenshots
+
+Screenshots and a short GIF pending — add to /public/screenshots/ and reference them here:
+
+intro-scene.png — opening scene with animated title
+scroll-timeline.gif — short demo of scroll-driven progression
+interactive-moment.png — one of the interactive moments
+mobile.png — mobile-optimized layout
+
+
+🎯 Features
+
+Scroll-driven narrative — horizontal, chapter-by-chapter storytelling tied to scroll position.
+PixiJS rendering — hardware-accelerated 2D canvas for animated sprites and cinematic effects.
+Real-time interactions — characters and scenes respond to the user.
+Mobile performance optimization — tuned asset loading, sprite sheet bundling, deferred rendering off-screen.
+Cross-device compatibility — tested on iOS Safari, Android Chrome and desktop.
+Audio cues (optional) — ambient music synchronized with scenes.
+
+🛠 Tech Stack
+LayerTechnologyFrameworkNext.js (App Router)RenderingPixiJS (WebGL 2D canvas)UI glueReactStylingCSS + PostCSSHostingVercel
+🏗 Technical Highlights
+
+PixiJS + React integration — custom hooks to bridge Pixi's imperative API with React's declarative lifecycle without forcing re-renders of the canvas.
+Sprite sheet optimization — packed textures to minimize GPU memory and draw calls.
+Scroll orchestration — scroll position mapped to scene timeline with debounced updates for smooth 60fps feel even on mid-range phones.
+Lazy scene loading — only the active and adjacent scenes are mounted, keeping memory low on long experiences.
+Mobile-first asset pipeline — responsive image variants served based on device pixel ratio and viewport.
+
+🚀 Getting Started
+bash# Clone and install
+git clone https://github.com/Immerhaze/wedding.git
+cd wedding
+npm install
+
+# Run dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+# Build for production
+npm run build
+Open http://localhost:3000 and scroll to experience the story.
+📂 Project Structure
+wedding/
+├── app/                 # Next.js routes and layout
+├── public/              # Sprites, sprite sheets, audio, screenshots
+├── components/          # React components (scene wrappers, controls)
+├── lib/                 # Pixi setup, scroll orchestrator, asset loaders
+└── styles/              # Global styles
+📈 Status
+✅ Shipped for the wedding. Live at wedding-two-pied.vercel.app.
+👤 Author
+Nicolas Romero — Frontend / Full-Stack Developer
+Portfolio · LinkedIn · GitHub
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+<div align="center">
+<sub>Built with ❤ for my sister, in Viña del Mar, Chile</sub>
+</div>
