@@ -13,10 +13,9 @@ Think of it as a browser-native mini-game that happens to be a wedding invitatio
 📸 Screenshots
 
 Screenshots and a short GIF pending — add to /public/screenshots/ and reference them here:
-
-1.png — opening scene with animated title
-2.png — short demo of scroll-driven progression
-3.png — one of the interactive moments
+![opening scene with animated title](screenshots/1.png) 
+![short demo of scroll-driven progression](screenshots/2.png) 
+![one of the interactive moments](screenshots/3.png) 
 
 
 🎯 Features
