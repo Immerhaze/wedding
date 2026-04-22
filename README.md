@@ -2,10 +2,6 @@
 Interactive Wedding Experience
 A side-scrolling, game-like e-invite built with Next.js and PixiJS
 Not your typical wedding invitation — a fully interactive, scroll-driven narrative with animated sprites, cinematic transitions and a mobile-first immersive layout.
-Mostrar imagen
-Mostrar imagen
-Mostrar imagen
-Mostrar imagen
 🔗 Live Experience · 🛠 Stack
 </div>
 
@@ -18,10 +14,9 @@ Think of it as a browser-native mini-game that happens to be a wedding invitatio
 
 Screenshots and a short GIF pending — add to /public/screenshots/ and reference them here:
 
-intro-scene.png — opening scene with animated title
-scroll-timeline.gif — short demo of scroll-driven progression
-interactive-moment.png — one of the interactive moments
-mobile.png — mobile-optimized layout
+1.png — opening scene with animated title
+2.png — short demo of scroll-driven progression
+3.png — one of the interactive moments
 
 
 🎯 Features
