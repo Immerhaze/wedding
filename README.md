@@ -13,9 +13,9 @@ Think of it as a browser-native mini-game that happens to be a wedding invitatio
 📸 Screenshots
 
 Screenshots and a short GIF pending — add to /public/screenshots/ and reference them here:
-![opening scene with animated title](screenshots/1.png) 
-![short demo of scroll-driven progression](screenshots/2.png) 
-![one of the interactive moments](screenshots/3.png) 
+![opening scene with animated title](https://github.com/Immerhaze/wedding/blob/master/public/screenshots/1.png) 
+![short demo of scroll-driven progression](https://github.com/Immerhaze/wedding/blob/master/public/screenshots/2.png) 
+![one of the interactive moments](https://github.com/Immerhaze/wedding/blob/master/public/screenshots/3.png) 
 
 
 🎯 Features
